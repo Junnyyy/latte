@@ -44,6 +44,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         setInfo(null)
         setElapsed(0)
       } else {
+        // Update info to reflect any external changes (flags, duration, PID)
+        setInfo(current)
         const secs = Math.floor((Date.now() - current.startTime.getTime()) / 1000)
         setElapsed(secs)
       }
