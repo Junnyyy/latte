@@ -1,12 +1,35 @@
 {
   "name": "latte",
+  "version": "0.1.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "latte": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build ./src/index.ts --compile --outfile latte",
+    "typecheck": "bunx tsc --noEmit",
+    "link": "./scripts/install.sh link",
+    "install:global": "./scripts/install.sh compile",
+    "uninstall": "./scripts/uninstall.sh",
+    "release": "./scripts/release.sh"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "ink-testing-library": "^4.0.0",
+    "react-devtools-core": "^7.0.1"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@effect/cli": "^0.75.0",
+    "@effect/platform": "^0.96.0",
+    "@effect/platform-bun": "^0.89.0",
+    "effect": "^3.21.0",
+    "ink": "^6.8.0",
+    "react": "^19.2.4"
   }
 }
