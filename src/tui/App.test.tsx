@@ -21,6 +21,7 @@ const timedInfo: CaffeinateInfo = {
 }
 
 const noop = async (): Promise<TuiResult> => ({ ok: true, info: null })
+const noopDetect = async () => null
 
 function wait(ms: number = 50): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -29,7 +30,7 @@ function wait(ms: number = 50): Promise<void> {
 describe("App", () => {
   test("renders inactive state when no caffeinate", () => {
     const { lastFrame } = render(
-      <App initialInfo={null} onStart={noop} onStop={noop} />,
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
     )
     const frame = lastFrame()
     expect(frame).toContain("Inactive")
@@ -38,7 +39,7 @@ describe("App", () => {
 
   test("renders active state with caffeinate info", () => {
     const { lastFrame } = render(
-      <App initialInfo={activeInfo} onStart={noop} onStop={noop} />,
+      <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
     )
     const frame = lastFrame()
     expect(frame).toContain("Active")
@@ -47,7 +48,7 @@ describe("App", () => {
 
   test("renders timed session with remaining", () => {
     const { lastFrame } = render(
-      <App initialInfo={timedInfo} onStart={noop} onStop={noop} />,
+      <App initialInfo={timedInfo} onStart={noop} onStop={noop} onDetect={async () => timedInfo} />,
     )
     const frame = lastFrame()
     expect(frame).toContain("Active")
@@ -56,7 +57,7 @@ describe("App", () => {
 
   test("shows action bar with keybinds", () => {
     const { lastFrame } = render(
-      <App initialInfo={null} onStart={noop} onStop={noop} />,
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
     )
     const frame = lastFrame()
     expect(frame).toContain("[o]")
@@ -74,7 +75,7 @@ describe("App", () => {
     }
 
     const { stdin } = render(
-      <App initialInfo={null} onStart={onStart} onStop={noop} />,
+      <App initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
     stdin.write("o")
@@ -85,7 +86,7 @@ describe("App", () => {
 
   test("pressing o on active state shows confirm dialog", async () => {
     const { lastFrame, stdin } = render(
-      <App initialInfo={activeInfo} onStart={noop} onStop={noop} />,
+      <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
     )
 
     stdin.write("o")
@@ -105,7 +106,7 @@ describe("App", () => {
     }
 
     const { stdin } = render(
-      <App initialInfo={activeInfo} onStart={noop} onStop={onStop} />,
+      <App initialInfo={activeInfo} onStart={noop} onStop={onStop} onDetect={async () => activeInfo} />,
     )
 
     stdin.write("x")
@@ -116,7 +117,7 @@ describe("App", () => {
 
   test("pressing t shows duration input", async () => {
     const { lastFrame, stdin } = render(
-      <App initialInfo={null} onStart={noop} onStop={noop} />,
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
     )
 
     stdin.write("t")
@@ -130,7 +131,7 @@ describe("App", () => {
 
   test("cancelling confirm dialog returns to list", async () => {
     const { lastFrame, stdin } = render(
-      <App initialInfo={activeInfo} onStart={noop} onStop={noop} />,
+      <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
     )
 
     stdin.write("o")

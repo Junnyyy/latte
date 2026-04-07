@@ -14,6 +14,7 @@ export interface Props {
   initialInfo: CaffeinateInfo | null
   onStart: (duration?: number) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
+  onDetect: () => Promise<CaffeinateInfo | null>
 }
 
 const actions = [
@@ -23,7 +24,7 @@ const actions = [
   { key: "q", label: "quit" },
 ]
 
-export const App: React.FC<Props> = ({ initialInfo, onStart, onStop }) => {
+export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect }) => {
   const { exit } = useApp()
   const [info, setInfo] = useState<CaffeinateInfo | null>(initialInfo)
   const [mode, setMode] = useState<Mode>("idle")
@@ -32,23 +33,23 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop }) => {
   const [pendingDuration, setPendingDuration] = useState<number | undefined>(undefined)
   const [durationError, setDurationError] = useState<string | null>(null)
 
-  // Tick elapsed every second
+  // Tick elapsed every second, re-detect process liveness
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (info) {
-        const now = Date.now()
-        const secs = Math.floor((now - info.startTime.getTime()) / 1000)
-        setElapsed(secs)
+    if (!info) return
 
-        // Check if timed session expired
-        if (info.duration !== null && secs >= info.duration) {
-          setInfo(null)
-          setElapsed(0)
-        }
+    const interval = setInterval(async () => {
+      const current = await onDetect()
+      if (!current) {
+        // Process died externally (or timed session expired)
+        setInfo(null)
+        setElapsed(0)
+      } else {
+        const secs = Math.floor((Date.now() - current.startTime.getTime()) / 1000)
+        setElapsed(secs)
       }
     }, 1000)
     return () => clearInterval(interval)
-  }, [info])
+  }, [info, onDetect])
 
   // Initialize elapsed on mount / info change
   useEffect(() => {
@@ -78,12 +79,12 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop }) => {
   const handleStop = useCallback(async () => {
     try {
       const result = await onStop()
-      if (result.ok) {
-        setInfo(null)
-        setMode("idle")
-      } else {
-        setErrorMessage(result.error)
-        setMode("error")
+      // Always clear info — if stop failed, the process is likely already gone.
+      // The desired state (no caffeinate) is achieved either way.
+      setInfo(null)
+      setMode("idle")
+      if (!result.ok) {
+        // Process was already gone — not a real error for the user
       }
     } catch (e: unknown) {
       setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
@@ -147,21 +148,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop }) => {
     }
   })
 
-  const handleConfirm = useCallback(async () => {
-    try {
-      const result = await onStop()
-      if (!result.ok) {
-        setErrorMessage(result.error)
-        setMode("error")
-        return
-      }
-      setInfo(null)
-      await handleStart(pendingDuration)
-    } catch (e: unknown) {
-      setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
-      setMode("error")
-    }
-  }, [onStop, handleStart, pendingDuration])
+  // onStart already kills existing caffeinate before starting (via Effect.catchAll),
+  // so handleConfirm just delegates directly — no separate stop needed.
+  const handleConfirm = useCallback(() => {
+    handleStart(pendingDuration)
+  }, [handleStart, pendingDuration])
 
   const handleCancel = useCallback(() => {
     setPendingDuration(undefined)

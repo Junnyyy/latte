@@ -3,8 +3,7 @@ import { render } from "ink"
 import { Effect, Runtime, Option } from "effect"
 import { CaffeinateService } from "../services/Caffeinate.ts"
 import { App } from "../tui/App.tsx"
-import { fail } from "../utils/exit.ts"
-import type { TuiResult } from "../types/index.ts"
+import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
 
 export const tuiHandler = () =>
   Effect.gen(function* () {
@@ -47,11 +46,19 @@ export const tuiHandler = () =>
       return await Runtime.runPromise(rt)(program)
     }
 
+    const onDetect = async (): Promise<CaffeinateInfo | null> => {
+      const program = Effect.gen(function* () {
+        const s = yield* CaffeinateService
+        return yield* s.detect().pipe(Effect.map(Option.getOrNull))
+      }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+      return await Runtime.runPromise(rt)(program)
+    }
+
     // Render Ink TUI to stderr (same as WT) so stdout stays clean
     yield* Effect.async<void, never>((resume) => {
       try {
         const { waitUntilExit } = render(
-          React.createElement(App, { initialInfo, onStart, onStop }),
+          React.createElement(App, { initialInfo, onStart, onStop, onDetect }),
           { stdout: process.stderr, stdin: process.stdin, stderr: process.stderr, patchConsole: false },
         )
 
