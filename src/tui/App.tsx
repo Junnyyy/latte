@@ -147,9 +147,21 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop }) => {
     }
   })
 
-  const handleConfirm = useCallback(() => {
-    handleStop().then(() => handleStart(pendingDuration))
-  }, [handleStop, handleStart, pendingDuration])
+  const handleConfirm = useCallback(async () => {
+    try {
+      const result = await onStop()
+      if (!result.ok) {
+        setErrorMessage(result.error)
+        setMode("error")
+        return
+      }
+      setInfo(null)
+      await handleStart(pendingDuration)
+    } catch (e: unknown) {
+      setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
+      setMode("error")
+    }
+  }, [onStop, handleStart, pendingDuration])
 
   const handleCancel = useCallback(() => {
     setPendingDuration(undefined)

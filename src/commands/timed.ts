@@ -3,6 +3,7 @@ import { CaffeinateService } from "../services/Caffeinate.ts"
 import { fail } from "../utils/exit.ts"
 import { bold, green, yellow } from "../utils/format.ts"
 import { parseDuration, formatDuration } from "../utils/duration.ts"
+import { promptYesNo } from "../utils/prompt.ts"
 
 export const timedHandler = (durationStr: string) =>
   Effect.gen(function* () {
@@ -40,22 +41,3 @@ export const timedHandler = (durationStr: string) =>
       return fail(`Error: ${"message" in e ? e.message : String(e)}`)
     }),
   )
-
-function promptYesNo(question: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    process.stdout.write(`${question} (y/n) `)
-    process.stdin.setRawMode?.(true)
-    process.stdin.resume()
-    process.stdin.setEncoding("utf8")
-
-    const onData = (data: string) => {
-      process.stdin.removeListener("data", onData)
-      process.stdin.setRawMode?.(false)
-      process.stdin.pause()
-      process.stdout.write(`${data}\n`)
-      resolve(data.toLowerCase() === "y")
-    }
-
-    process.stdin.on("data", onData)
-  })
-}
