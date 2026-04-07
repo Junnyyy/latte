@@ -2,6 +2,7 @@ import { Command } from "@effect/cli"
 import { onHandler } from "./commands/on.ts"
 import { offHandler } from "./commands/off.ts"
 import { statusHandler } from "./commands/status.ts"
+import { tuiHandler } from "./commands/tui.ts"
 import pkg from "../package.json"
 
 // --- Subcommands ---
@@ -31,8 +32,7 @@ const rootCommand = Command.make(
   {},
   () =>
     // If stderr is a TTY, launch interactive TUI; otherwise show status
-    // TUI will be wired in Task 17 — for now, always show status
-    process.stderr.isTTY ? statusHandler() : statusHandler(),
+    process.stderr.isTTY ? tuiHandler() : statusHandler(),
 )
 
 const command = rootCommand.pipe(
