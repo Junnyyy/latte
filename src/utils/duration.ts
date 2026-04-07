@@ -29,8 +29,8 @@ export const parseDuration = (input: string): Effect.Effect<number, DurationPars
     )
   }
 
-  const value = parseInt(match[1], 10)
-  const unit = match[2].toLowerCase()
+  const value = parseInt(match[1]!, 10)
+  const unit = match[2]!.toLowerCase()
 
   if (value <= 0) {
     return Effect.fail(
