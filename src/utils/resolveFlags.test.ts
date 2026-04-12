@@ -22,6 +22,10 @@ describe("parseEnvFlags", () => {
     expect(parseEnvFlags("")).toEqual(new Set())
   })
 
+  test("parses space-separated flags", () => {
+    expect(parseEnvFlags("-d -s")).toEqual(new Set(["d", "s"]))
+  })
+
   test("ignores invalid characters and returns valid ones", () => {
     const warn: string[] = []
     const orig = process.stderr.write.bind(process.stderr)
@@ -90,6 +94,17 @@ describe("resolveFlags", () => {
       else process.env.LATTE_FLAGS = orig
     }
   })
+
+  test("env add and CLI remove of different flag", () => {
+    const orig = process.env.LATTE_FLAGS
+    process.env.LATTE_FLAGS = "-d"
+    try {
+      expect(resolveFlags(new Set(), new Set(["i"]))).toBe("-dmsu")
+    } finally {
+      if (orig === undefined) delete process.env.LATTE_FLAGS
+      else process.env.LATTE_FLAGS = orig
+    }
+  })
 })
 
 describe("buildHint", () => {
@@ -125,7 +140,7 @@ describe("buildHint", () => {
     }
   })
 
-  test("shows multiple flags in hint", () => {
+  test("shows hint containing the flag", () => {
     const orig = process.env.LATTE_FLAGS
     delete process.env.LATTE_FLAGS
     try {
