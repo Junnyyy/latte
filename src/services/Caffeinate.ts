@@ -2,6 +2,7 @@ import { Effect, Option } from "effect"
 import { CaffeinateSpawnError, NoCaffeinateError } from "../errors/index.ts"
 import { ProcessService } from "./Process.ts"
 import type { CaffeinateInfo } from "../types/index.ts"
+import { flagSetToString, DEFAULT_FLAGS } from "../utils/resolveFlags.ts"
 
 export class CaffeinateService extends Effect.Service<CaffeinateService>()("CaffeinateService", {
   effect: Effect.gen(function* () {
@@ -31,9 +32,10 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         return Option.some(parsePsLine(line))
       })
 
-    const start = (duration?: number): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
+    const start = (duration?: number, flags?: string): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
       Effect.gen(function* () {
-        const args = ["caffeinate", "-imsu"]
+        const flagStr = flags ?? flagSetToString(DEFAULT_FLAGS)
+        const args = flagStr ? ["caffeinate", flagStr] : ["caffeinate"]
         if (duration !== undefined) {
           args.push("-t", String(duration))
         }
@@ -53,7 +55,7 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         // Fallback: construct info from what we know
         return {
           pid,
-          flags: "-imsu",
+          flags: flagStr,
           startTime: new Date(),
           duration: duration ?? null,
           remaining: duration ?? null,
@@ -90,8 +92,8 @@ function parsePsLine(line: string): CaffeinateInfo {
 
   // Extract flags — everything after "caffeinate"
   const argsStr = caffeinateIdx >= 0 ? afterPid.slice(caffeinateIdx) : ""
-  const flagMatch = argsStr.match(/caffeinate\s+(-\w+)/)
-  const flags = flagMatch ? flagMatch[1]! : "-imsu"
+  const flagMatch = argsStr.match(/caffeinate\s+(-[dimsu]+)/)
+  const flags = flagMatch ? flagMatch[1]! : ""
 
   // Extract -t duration if present
   const durationMatch = argsStr.match(/-t\s+(\d+)/)

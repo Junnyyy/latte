@@ -81,6 +81,24 @@ describe("CaffeinateService.detect", () => {
       expect(result.value.duration).toBe(1800)
     }
   })
+
+  test("returns empty flags when caffeinate has no mode flags", async () => {
+    const result = await runWithMock(
+      {
+        pgrep: "42\n",
+        ps: "42 Mon Apr  6 10:00:00 2026 caffeinate -t 1800\n",
+      },
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.detect()
+      }),
+    )
+    expect(Option.isSome(result)).toBe(true)
+    if (Option.isSome(result)) {
+      expect(result.value.flags).toBe("")
+      expect(result.value.duration).toBe(1800)
+    }
+  })
 })
 
 describe("CaffeinateService.start", () => {
@@ -140,6 +158,63 @@ describe("CaffeinateService.start", () => {
 
     expect(spawnedArgs).toEqual(["caffeinate", "-imsu", "-t", "1800"])
     expect(result.duration).toBe(1800)
+  })
+
+  test("spawns caffeinate with custom flags", async () => {
+    let spawnedArgs: string[] = []
+    const testLayer = CaffeinateService.DefaultWithoutDependencies.pipe(
+      Layer.provide(
+        Layer.succeed(ProcessService, {
+          exec: (args: string[]) => {
+            if (args.join(" ").includes("pgrep")) return Effect.fail(new ProcessError({ command: "", cause: "" }))
+            if (args.join(" ").includes("ps")) return Effect.succeed("12345 Mon Apr  6 10:00:00 2026 caffeinate -dimsu\n")
+            return Effect.succeed("")
+          },
+          spawnDetached: (args: string[]) => {
+            spawnedArgs = args
+            return Effect.succeed(12345)
+          },
+        } as any),
+      ),
+    )
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.start(undefined, "-dimsu")
+      }).pipe(Effect.provide(testLayer)),
+    )
+
+    expect(spawnedArgs).toEqual(["caffeinate", "-dimsu"])
+    expect(result.pid).toBe(12345)
+  })
+
+  test("spawns caffeinate with no flags when empty string", async () => {
+    let spawnedArgs: string[] = []
+    const testLayer = CaffeinateService.DefaultWithoutDependencies.pipe(
+      Layer.provide(
+        Layer.succeed(ProcessService, {
+          exec: (args: string[]) => {
+            if (args.join(" ").includes("pgrep")) return Effect.fail(new ProcessError({ command: "", cause: "" }))
+            if (args.join(" ").includes("ps")) return Effect.succeed("12345 Mon Apr  6 10:00:00 2026 caffeinate\n")
+            return Effect.succeed("")
+          },
+          spawnDetached: (args: string[]) => {
+            spawnedArgs = args
+            return Effect.succeed(12345)
+          },
+        } as any),
+      ),
+    )
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.start(undefined, "")
+      }).pipe(Effect.provide(testLayer)),
+    )
+
+    expect(spawnedArgs).toEqual(["caffeinate"])
   })
 })
 

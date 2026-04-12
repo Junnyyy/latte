@@ -5,14 +5,16 @@ import { StatusDisplay } from "./components/StatusDisplay.tsx"
 import { ActionBar } from "./components/ActionBar.tsx"
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx"
 import { DurationInput } from "./components/DurationInput.tsx"
+import { FlagPicker } from "./components/FlagPicker.tsx"
 import { parseDuration } from "../utils/duration.ts"
+import { initialFlagSet, flagSetToString } from "../utils/resolveFlags.ts"
 import { Effect } from "effect"
 
-type Mode = "idle" | "confirm-on" | "confirm-timed" | "duration-input" | "error"
+type Mode = "idle" | "confirm-on" | "confirm-timed" | "duration-input" | "flag-picker" | "error"
 
 export interface Props {
   initialInfo: CaffeinateInfo | null
-  onStart: (duration?: number) => Promise<TuiResult>
+  onStart: (duration?: number, flags?: string) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
   onDetect: () => Promise<CaffeinateInfo | null>
 }
@@ -21,6 +23,7 @@ const actions = [
   { key: "o", label: "on" },
   { key: "x", label: "off" },
   { key: "t", label: "timed" },
+  { key: "f", label: "flags" },
   { key: "q", label: "quit" },
 ]
 
@@ -32,6 +35,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingDuration, setPendingDuration] = useState<number | undefined>(undefined)
   const [durationError, setDurationError] = useState<string | null>(null)
+  const [sessionFlags, setSessionFlags] = useState<Set<string>>(() => initialFlagSet())
+  const [pickerFlags, setPickerFlags] = useState<Set<string>>(new Set())
 
   // Tick elapsed every second, re-detect process liveness
   useEffect(() => {
@@ -40,11 +45,9 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     const interval = setInterval(async () => {
       const current = await onDetect()
       if (!current) {
-        // Process died externally (or timed session expired)
         setInfo(null)
         setElapsed(0)
       } else {
-        // Update info to reflect any external changes (flags, duration, PID)
         setInfo(current)
         const secs = Math.floor((Date.now() - current.startTime.getTime()) / 1000)
         setElapsed(secs)
@@ -64,7 +67,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
 
   const handleStart = useCallback(async (duration?: number) => {
     try {
-      const result = await onStart(duration)
+      const flagStr = flagSetToString(sessionFlags)
+      const result = await onStart(duration, flagStr)
       if (result.ok) {
         setInfo(result.info)
         setMode("idle")
@@ -76,13 +80,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
       setMode("error")
     }
-  }, [onStart])
+  }, [onStart, sessionFlags])
 
   const handleStop = useCallback(async () => {
     try {
       const result = await onStop()
-      // Always clear info — if stop failed, the process is likely already gone.
-      // The desired state (no caffeinate) is achieved either way.
       setInfo(null)
       setMode("idle")
       if (!result.ok) {
@@ -105,13 +107,38 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     setDurationError(null)
 
     if (info) {
-      // Existing caffeinate — need confirmation
       setPendingDuration(seconds)
       setMode("confirm-timed")
     } else {
       handleStart(seconds)
     }
   }, [info, handleStart])
+
+  // Flag picker handlers
+  const handleFlagToggle = useCallback((flag: string) => {
+    setPickerFlags((prev) => {
+      const next = new Set(prev)
+      if (next.has(flag)) {
+        next.delete(flag)
+      } else {
+        next.add(flag)
+      }
+      return next
+    })
+  }, [])
+
+  const handleFlagConfirm = useCallback(() => {
+    setSessionFlags(new Set(pickerFlags))
+    setMode("idle")
+  }, [pickerFlags])
+
+  const handleFlagCancel = useCallback(() => {
+    setMode("idle")
+  }, [])
+
+  const handleFlagReset = useCallback(() => {
+    setPickerFlags(initialFlagSet())
+  }, [])
 
   useInput((input, key) => {
     // Dismiss error on any key
@@ -148,10 +175,13 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       setDurationError(null)
       setMode("duration-input")
     }
+
+    if (input === "f") {
+      setPickerFlags(new Set(sessionFlags))
+      setMode("flag-picker")
+    }
   })
 
-  // onStart already kills existing caffeinate before starting (via Effect.catchAll),
-  // so handleConfirm just delegates directly — no separate stop needed.
   const handleConfirm = useCallback(() => {
     handleStart(pendingDuration)
   }, [handleStart, pendingDuration])
@@ -190,6 +220,16 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         />
       )}
 
+      {mode === "flag-picker" && (
+        <FlagPicker
+          flags={pickerFlags}
+          onToggle={handleFlagToggle}
+          onConfirm={handleFlagConfirm}
+          onCancel={handleFlagCancel}
+          onReset={handleFlagReset}
+        />
+      )}
+
       {mode === "error" && errorMessage && (
         <Box marginTop={1} flexDirection="column">
           <Text color="red">{errorMessage}</Text>
@@ -197,7 +237,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         </Box>
       )}
 
-      <ActionBar actions={actions} />
+      {mode !== "flag-picker" && <ActionBar actions={actions} />}
     </Box>
   )
 }
