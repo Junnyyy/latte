@@ -147,14 +147,7 @@ export const parseArgvFlags = (
  * Returns null if there's nothing to suggest.
  */
 export const buildHint = (cliAdds: Set<string>, cliRemoves: Set<string>): string | null => {
-  // Compute what's already "on" before CLI (silent parse to avoid double warning)
-  const baseline = new Set(DEFAULT_FLAGS)
-  const envValue = process.env.LATTE_FLAGS
-  if (envValue) {
-    for (const f of parseEnvFlagsSilent(envValue)) {
-      baseline.add(f)
-    }
-  }
+  const baseline = initialFlagSet()
 
   // Find flags the user added via CLI that aren't already in the baseline
   // and weren't also removed in the same invocation
