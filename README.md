@@ -181,6 +181,9 @@ latte on
 # Start with a timeout
 latte 2h
 
+# Keep the display on (e.g. for visual monitoring)
+latte on -d
+
 # Check if running
 latte status
 
