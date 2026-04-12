@@ -31,9 +31,10 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         return Option.some(parsePsLine(line))
       })
 
-    const start = (duration?: number): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
+    const start = (duration?: number, flags?: string): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
       Effect.gen(function* () {
-        const args = ["caffeinate", "-imsu"]
+        const flagStr = flags ?? "-imsu"
+        const args = flagStr ? ["caffeinate", flagStr] : ["caffeinate"]
         if (duration !== undefined) {
           args.push("-t", String(duration))
         }
@@ -53,7 +54,7 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         // Fallback: construct info from what we know
         return {
           pid,
-          flags: "-imsu",
+          flags: flagStr,
           startTime: new Date(),
           duration: duration ?? null,
           remaining: duration ?? null,

@@ -141,6 +141,35 @@ describe("CaffeinateService.start", () => {
     expect(spawnedArgs).toEqual(["caffeinate", "-imsu", "-t", "1800"])
     expect(result.duration).toBe(1800)
   })
+
+  test("spawns caffeinate with custom flags", async () => {
+    let spawnedArgs: string[] = []
+    const testLayer = CaffeinateService.DefaultWithoutDependencies.pipe(
+      Layer.provide(
+        Layer.succeed(ProcessService, {
+          exec: (args: string[]) => {
+            if (args.join(" ").includes("pgrep")) return Effect.fail(new ProcessError({ command: "", cause: "" }))
+            if (args.join(" ").includes("ps")) return Effect.succeed("12345 Mon Apr  6 10:00:00 2026 caffeinate -dimsu\n")
+            return Effect.succeed("")
+          },
+          spawnDetached: (args: string[]) => {
+            spawnedArgs = args
+            return Effect.succeed(12345)
+          },
+        } as any),
+      ),
+    )
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.start(undefined, "-dimsu")
+      }).pipe(Effect.provide(testLayer)),
+    )
+
+    expect(spawnedArgs).toEqual(["caffeinate", "-dimsu"])
+    expect(result.pid).toBe(12345)
+  })
 })
 
 describe("CaffeinateService.kill", () => {
