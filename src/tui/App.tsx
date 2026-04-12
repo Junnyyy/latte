@@ -237,7 +237,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         </Box>
       )}
 
-      <ActionBar actions={actions} />
+      {mode !== "flag-picker" && <ActionBar actions={actions} />}
     </Box>
   )
 }

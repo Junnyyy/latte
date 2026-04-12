@@ -155,7 +155,7 @@ describe("App", () => {
     expect(frame).toContain("flags")
   })
 
-  test("pressing f opens flag picker", async () => {
+  test("pressing f opens flag picker and hides action bar", async () => {
     const { lastFrame, stdin } = render(
       <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
     )
@@ -168,6 +168,11 @@ describe("App", () => {
     expect(frame).toContain("[d]")
     expect(frame).toContain("[enter]")
     expect(frame).toContain("[esc]")
+    // ActionBar should be hidden
+    expect(frame).not.toContain("[o]")
+    expect(frame).not.toContain("[q]")
+    // Disabled flags show ○
+    expect(frame).toContain("○")
   })
 
   test("toggling a flag in picker updates display", async () => {

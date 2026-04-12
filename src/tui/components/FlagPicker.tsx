@@ -47,11 +47,11 @@ export const FlagPicker: React.FC<Props> = ({ flags, onToggle, onConfirm, onCanc
           <Box key={f} gap={0}>
             <Text bold color="cyan">[{f}]</Text>
             <Text dimColor> {FLAG_LABELS[f]}</Text>
-            {flags.has(f) && <Text color="green"> ●</Text>}
+            {flags.has(f) ? <Text color="green"> ●</Text> : <Text dimColor> ○</Text>}
           </Box>
         ))}
       </Box>
-      <Box gap={2} marginTop={0}>
+      <Box gap={2} marginTop={1}>
         <Box gap={0}>
           <Text bold color="cyan">[enter]</Text>
           <Text dimColor> done</Text>
