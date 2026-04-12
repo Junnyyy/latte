@@ -36,7 +36,7 @@ export const onHandler = (
     yield* svc.start(undefined, flags)
     yield* Console.log(`${bold("☕")} ${green("Caffeinate started")} — preventing sleep`)
 
-    const hint = buildHint(cliAdds)
+    const hint = buildHint(cliAdds, cliRemoves)
     if (hint) {
       yield* Console.log(dim(hint))
     }

@@ -91,8 +91,8 @@ function parsePsLine(line: string): CaffeinateInfo {
 
   // Extract flags — everything after "caffeinate"
   const argsStr = caffeinateIdx >= 0 ? afterPid.slice(caffeinateIdx) : ""
-  const flagMatch = argsStr.match(/caffeinate\s+(-\w+)/)
-  const flags = flagMatch ? flagMatch[1]! : "-imsu"
+  const flagMatch = argsStr.match(/caffeinate\s+(-[dimsu]+)/)
+  const flags = flagMatch ? flagMatch[1]! : ""
 
   // Extract -t duration if present
   const durationMatch = argsStr.match(/-t\s+(\d+)/)

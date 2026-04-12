@@ -112,7 +112,7 @@ describe("buildHint", () => {
     const orig = process.env.LATTE_FLAGS
     delete process.env.LATTE_FLAGS
     try {
-      const hint = buildHint(new Set(["d"]))
+      const hint = buildHint(new Set(["d"]), new Set())
       expect(hint).toBe(
         'Tip: add `export LATTE_FLAGS="-d"` to your shell profile to always use this flag.',
       )
@@ -122,18 +122,18 @@ describe("buildHint", () => {
   })
 
   test("returns null when no non-default CLI adds", () => {
-    expect(buildHint(new Set())).toBeNull()
+    expect(buildHint(new Set(), new Set())).toBeNull()
   })
 
   test("returns null when add is already in defaults", () => {
-    expect(buildHint(new Set(["i"]))).toBeNull()
+    expect(buildHint(new Set(["i"]), new Set())).toBeNull()
   })
 
   test("returns null when add is already in LATTE_FLAGS", () => {
     const orig = process.env.LATTE_FLAGS
     process.env.LATTE_FLAGS = "-d"
     try {
-      expect(buildHint(new Set(["d"]))).toBeNull()
+      expect(buildHint(new Set(["d"]), new Set())).toBeNull()
     } finally {
       if (orig === undefined) delete process.env.LATTE_FLAGS
       else process.env.LATTE_FLAGS = orig
@@ -144,8 +144,18 @@ describe("buildHint", () => {
     const orig = process.env.LATTE_FLAGS
     delete process.env.LATTE_FLAGS
     try {
-      const hint = buildHint(new Set(["d"]))
+      const hint = buildHint(new Set(["d"]), new Set())
       expect(hint).toContain("-d")
+    } finally {
+      if (orig !== undefined) process.env.LATTE_FLAGS = orig
+    }
+  })
+
+  test("returns null when flag is both added and removed (contradictory)", () => {
+    const orig = process.env.LATTE_FLAGS
+    delete process.env.LATTE_FLAGS
+    try {
+      expect(buildHint(new Set(["d"]), new Set(["d"]))).toBeNull()
     } finally {
       if (orig !== undefined) process.env.LATTE_FLAGS = orig
     }

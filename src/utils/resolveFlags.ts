@@ -2,6 +2,19 @@ export const VALID_FLAGS = new Set(["d", "i", "m", "s", "u"])
 export const DEFAULT_FLAGS = new Set(["i", "m", "s", "u"])
 
 /**
+ * Parse LATTE_FLAGS env var value into a set of valid flag characters (pure, no warning).
+ * Leading dashes and whitespace are stripped. Invalid characters are silently ignored.
+ */
+const parseEnvFlagsSilent = (value: string): Set<string> => {
+  const cleaned = value.replace(/[-\s]/g, "")
+  const result = new Set<string>()
+  for (const char of cleaned) {
+    if (VALID_FLAGS.has(char)) result.add(char)
+  }
+  return result
+}
+
+/**
  * Parse LATTE_FLAGS env var value into a set of valid flag characters.
  * Leading dashes and whitespace are stripped. Invalid characters produce
  * a warning to stderr and are ignored.
@@ -105,21 +118,25 @@ export const parseArgvFlags = (
 
 /**
  * Build a hint string suggesting the user add flags to LATTE_FLAGS,
- * but only for flags that are genuinely new (not in defaults or env).
+ * but only for flags that are genuinely new (not in defaults or env)
+ * and were not also removed in the same invocation.
  * Returns null if there's nothing to suggest.
  */
-export const buildHint = (cliAdds: Set<string>): string | null => {
-  // Compute what's already "on" before CLI
+export const buildHint = (cliAdds: Set<string>, cliRemoves: Set<string>): string | null => {
+  // Compute what's already "on" before CLI (silent parse to avoid double warning)
   const baseline = new Set(DEFAULT_FLAGS)
   const envValue = process.env.LATTE_FLAGS
   if (envValue) {
-    for (const f of parseEnvFlags(envValue)) {
+    for (const f of parseEnvFlagsSilent(envValue)) {
       baseline.add(f)
     }
   }
 
   // Find flags the user added via CLI that aren't already in the baseline
-  const newFlags = [...cliAdds].filter((f) => !baseline.has(f)).sort()
+  // and weren't also removed in the same invocation
+  const newFlags = [...cliAdds]
+    .filter((f) => !baseline.has(f) && !cliRemoves.has(f))
+    .sort()
   if (newFlags.length === 0) return null
 
   const flagStr = `-${newFlags.join("")}`

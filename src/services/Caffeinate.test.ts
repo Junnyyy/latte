@@ -81,6 +81,24 @@ describe("CaffeinateService.detect", () => {
       expect(result.value.duration).toBe(1800)
     }
   })
+
+  test("returns empty flags when caffeinate has no mode flags", async () => {
+    const result = await runWithMock(
+      {
+        pgrep: "42\n",
+        ps: "42 Mon Apr  6 10:00:00 2026 caffeinate -t 1800\n",
+      },
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.detect()
+      }),
+    )
+    expect(Option.isSome(result)).toBe(true)
+    if (Option.isSome(result)) {
+      expect(result.value.flags).toBe("")
+      expect(result.value.duration).toBe(1800)
+    }
+  })
 })
 
 describe("CaffeinateService.start", () => {

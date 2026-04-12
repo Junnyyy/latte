@@ -40,7 +40,7 @@ export const timedHandler = (
       `${bold("☕")} ${green("Caffeinate started")} — preventing sleep for ${formatDuration(seconds)}`,
     )
 
-    const hint = buildHint(cliAdds)
+    const hint = buildHint(cliAdds, cliRemoves)
     if (hint) {
       yield* Console.log(dim(hint))
     }
