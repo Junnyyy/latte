@@ -70,8 +70,7 @@ export const resolveFlags = (cliAdds: Set<string>, cliRemoves: Set<string>): str
     flags.delete(f)
   }
 
-  const sorted = [...flags].sort()
-  return sorted.length > 0 ? `-${sorted.join("")}` : ""
+  return flagSetToString(flags)
 }
 
 /**
