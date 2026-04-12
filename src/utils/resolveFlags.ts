@@ -74,6 +74,31 @@ export const resolveFlags = (cliAdds: Set<string>, cliRemoves: Set<string>): str
   return sorted.length > 0 ? `-${sorted.join("")}` : ""
 }
 
+/**
+ * Convert a flag set to a caffeinate flag string.
+ * e.g., Set(["d", "i", "m", "s", "u"]) → "-dimsu"
+ * Returns "" for an empty set.
+ */
+export const flagSetToString = (flags: Set<string>): string => {
+  const sorted = [...flags].sort()
+  return sorted.length > 0 ? `-${sorted.join("")}` : ""
+}
+
+/**
+ * Compute the initial flag set from defaults + LATTE_FLAGS env var.
+ * Used by the TUI to initialize session flag state.
+ */
+export const initialFlagSet = (): Set<string> => {
+  const flags = new Set(DEFAULT_FLAGS)
+  const envValue = process.env.LATTE_FLAGS
+  if (envValue) {
+    for (const f of parseEnvFlagsSilent(envValue)) {
+      flags.add(f)
+    }
+  }
+  return flags
+}
+
 const ADD_MAP: Record<string, string> = {
   "--display": "d", "-d": "d",
   "--idle": "i", "-i": "i",

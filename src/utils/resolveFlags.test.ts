@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { parseEnvFlags, resolveFlags, buildHint, parseArgvFlags } from "./resolveFlags.ts"
+import { parseEnvFlags, resolveFlags, buildHint, parseArgvFlags, flagSetToString, initialFlagSet } from "./resolveFlags.ts"
 
 describe("parseEnvFlags", () => {
   test("parses single flag", () => {
@@ -209,5 +209,42 @@ describe("parseArgvFlags", () => {
       "--no-display", "--no-idle", "--no-disk", "--no-system", "--no-wake",
     ])
     expect(removes).toEqual(new Set(["d", "i", "m", "s", "u"]))
+  })
+})
+
+describe("flagSetToString", () => {
+  test("converts set to sorted flag string", () => {
+    expect(flagSetToString(new Set(["d", "i", "m", "s", "u"]))).toBe("-dimsu")
+  })
+
+  test("returns empty string for empty set", () => {
+    expect(flagSetToString(new Set())).toBe("")
+  })
+
+  test("sorts flags alphabetically", () => {
+    expect(flagSetToString(new Set(["u", "d", "i"]))).toBe("-diu")
+  })
+})
+
+describe("initialFlagSet", () => {
+  test("returns defaults when no LATTE_FLAGS", () => {
+    const orig = process.env.LATTE_FLAGS
+    delete process.env.LATTE_FLAGS
+    try {
+      expect(initialFlagSet()).toEqual(new Set(["i", "m", "s", "u"]))
+    } finally {
+      if (orig !== undefined) process.env.LATTE_FLAGS = orig
+    }
+  })
+
+  test("merges LATTE_FLAGS with defaults", () => {
+    const orig = process.env.LATTE_FLAGS
+    process.env.LATTE_FLAGS = "-d"
+    try {
+      expect(initialFlagSet()).toEqual(new Set(["d", "i", "m", "s", "u"]))
+    } finally {
+      if (orig === undefined) delete process.env.LATTE_FLAGS
+      else process.env.LATTE_FLAGS = orig
+    }
   })
 })
