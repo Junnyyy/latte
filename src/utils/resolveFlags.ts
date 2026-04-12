@@ -61,6 +61,48 @@ export const resolveFlags = (cliAdds: Set<string>, cliRemoves: Set<string>): str
   return sorted.length > 0 ? `-${sorted.join("")}` : ""
 }
 
+const ADD_MAP: Record<string, string> = {
+  "--display": "d", "-d": "d",
+  "--idle": "i", "-i": "i",
+  "--disk": "m", "-m": "m",
+  "--system": "s", "-s": "s",
+  "--wake": "u", "-u": "u",
+}
+
+const REMOVE_MAP: Record<string, string> = {
+  "--no-display": "d",
+  "--no-idle": "i",
+  "--no-disk": "m",
+  "--no-system": "s",
+  "--no-wake": "u",
+}
+
+/**
+ * Parse raw argv for flag arguments. Used by the duration shortcut path
+ * where @effect/cli doesn't handle flag parsing.
+ * Unknown args are silently ignored.
+ */
+export const parseArgvFlags = (
+  args: string[],
+): { adds: Set<string>; removes: Set<string> } => {
+  const adds = new Set<string>()
+  const removes = new Set<string>()
+
+  for (const arg of args) {
+    const addFlag = ADD_MAP[arg]
+    if (addFlag) {
+      adds.add(addFlag)
+      continue
+    }
+    const removeFlag = REMOVE_MAP[arg]
+    if (removeFlag) {
+      removes.add(removeFlag)
+    }
+  }
+
+  return { adds, removes }
+}
+
 /**
  * Build a hint string suggesting the user add flags to LATTE_FLAGS,
  * but only for flags that are genuinely new (not in defaults or env).

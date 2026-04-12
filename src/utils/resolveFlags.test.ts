@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { parseEnvFlags, resolveFlags, buildHint } from "./resolveFlags.ts"
+import { parseEnvFlags, resolveFlags, buildHint, parseArgvFlags } from "./resolveFlags.ts"
 
 describe("parseEnvFlags", () => {
   test("parses single flag", () => {
@@ -134,5 +134,55 @@ describe("buildHint", () => {
     } finally {
       if (orig !== undefined) process.env.LATTE_FLAGS = orig
     }
+  })
+})
+
+describe("parseArgvFlags", () => {
+  test("parses --display into adds", () => {
+    const { adds, removes } = parseArgvFlags(["--display"])
+    expect(adds).toEqual(new Set(["d"]))
+    expect(removes).toEqual(new Set())
+  })
+
+  test("parses -d into adds", () => {
+    const { adds, removes } = parseArgvFlags(["-d"])
+    expect(adds).toEqual(new Set(["d"]))
+    expect(removes).toEqual(new Set())
+  })
+
+  test("parses --no-system into removes", () => {
+    const { adds, removes } = parseArgvFlags(["--no-system"])
+    expect(adds).toEqual(new Set())
+    expect(removes).toEqual(new Set(["s"]))
+  })
+
+  test("parses mixed adds and removes", () => {
+    const { adds, removes } = parseArgvFlags(["-d", "--no-system"])
+    expect(adds).toEqual(new Set(["d"]))
+    expect(removes).toEqual(new Set(["s"]))
+  })
+
+  test("ignores unknown args", () => {
+    const { adds, removes } = parseArgvFlags(["--unknown", "-d", "30m"])
+    expect(adds).toEqual(new Set(["d"]))
+    expect(removes).toEqual(new Set())
+  })
+
+  test("returns empty sets for no args", () => {
+    const { adds, removes } = parseArgvFlags([])
+    expect(adds).toEqual(new Set())
+    expect(removes).toEqual(new Set())
+  })
+
+  test("parses all short flags", () => {
+    const { adds } = parseArgvFlags(["-d", "-i", "-m", "-s", "-u"])
+    expect(adds).toEqual(new Set(["d", "i", "m", "s", "u"]))
+  })
+
+  test("parses all long remove flags", () => {
+    const { removes } = parseArgvFlags([
+      "--no-display", "--no-idle", "--no-disk", "--no-system", "--no-wake",
+    ])
+    expect(removes).toEqual(new Set(["d", "i", "m", "s", "u"]))
   })
 })
