@@ -1,11 +1,15 @@
 import { Console, Effect, Option } from "effect"
 import { CaffeinateService } from "../services/Caffeinate.ts"
 import { fail } from "../utils/exit.ts"
-import { bold, green, yellow } from "../utils/format.ts"
+import { bold, green, yellow, dim } from "../utils/format.ts"
 import { formatDuration } from "../utils/duration.ts"
 import { promptYesNo } from "../utils/prompt.ts"
+import { resolveFlags, buildHint } from "../utils/resolveFlags.ts"
 
-export const onHandler = () =>
+export const onHandler = (
+  cliAdds: Set<string> = new Set(),
+  cliRemoves: Set<string> = new Set(),
+) =>
   Effect.gen(function* () {
     const svc = yield* CaffeinateService
     const existing = yield* svc.detect()
@@ -19,7 +23,6 @@ export const onHandler = () =>
         `${yellow("⚠")} Caffeinate is already running (${formatDuration(elapsed)}, ${durationStr})`,
       )
 
-      // Prompt for confirmation
       const confirmed = yield* Effect.promise(() => promptYesNo("Kill existing and start indefinite?"))
       if (!confirmed) {
         yield* Console.log("Cancelled.")
@@ -29,8 +32,14 @@ export const onHandler = () =>
       yield* svc.kill().pipe(Effect.catchAll(() => Effect.void))
     }
 
-    yield* svc.start()
+    const flags = resolveFlags(cliAdds, cliRemoves)
+    yield* svc.start(undefined, flags)
     yield* Console.log(`${bold("☕")} ${green("Caffeinate started")} — preventing sleep`)
+
+    const hint = buildHint(cliAdds)
+    if (hint) {
+      yield* Console.log(dim(hint))
+    }
   }).pipe(
     Effect.catchAll((e) => fail(`Error: ${"message" in e ? e.message : String(e)}`)),
   )
