@@ -67,7 +67,7 @@ Or manually: `rm ~/.local/bin/latte`
 latte on
 ```
 
-Spawns `caffeinate -imsu` in the background and returns immediately. Prevents idle sleep, disk sleep, and system sleep while letting the display sleep naturally.
+Spawns `caffeinate -imsu` in the background and returns immediately. Prevents idle sleep, disk sleep, and system sleep while letting the display sleep naturally. Pass [custom flags](#custom-flags) to change which sleep modes are prevented.
 
 ### Turn off
 
@@ -86,6 +86,36 @@ latte 90s     # 90 seconds
 ```
 
 Caffeinate self-terminates when the timer expires. No cleanup needed.
+
+### Custom flags
+
+By default, latte uses `-imsu`. You can add or remove flags per session:
+
+```sh
+latte on --display          # add display sleep prevention (-d)
+latte on -d                 # same, short form
+latte on --no-system        # remove system sleep prevention
+latte 30m -d --no-system    # combine: add display, drop system
+```
+
+Available flags:
+
+| Short | Long | Removes |
+|-------|------|---------|
+| `-d` | `--display` | `--no-display` |
+| `-i` | `--idle` | `--no-idle` |
+| `-m` | `--disk` | `--no-disk` |
+| `-s` | `--system` | `--no-system` |
+| `-u` | `--wake` | `--no-wake` |
+
+To make flags permanent without a config file, set `LATTE_FLAGS` in your shell profile:
+
+```sh
+# Always keep the display on
+echo 'export LATTE_FLAGS="-d"' >> ~/.zshrc
+```
+
+`LATTE_FLAGS` is additive — it merges with the defaults. CLI flags override everything, with removes applied last.
 
 ### Check status
 
@@ -129,7 +159,7 @@ In the TUI, this appears as a confirm dialog instead of a y/n prompt.
 2. `ps` to extract flags, start time, and timer duration
 3. `pkill -x caffeinate` to stop it
 
-The flags are always `-imsu`:
+The default flags are `-imsu`:
 
 | Flag | Prevents |
 |------|----------|
@@ -138,7 +168,7 @@ The flags are always `-imsu`:
 | `-s` | System sleep (on AC power) |
 | `-u` | Declares user activity |
 
-No `-d` (display). The display is free to sleep — latte is for keeping the machine awake, not the screen.
+By default, no `-d` (display) — the display is free to sleep. To change which flags are used, see [Custom flags](#custom-flags).
 
 ## For AI agents
 
