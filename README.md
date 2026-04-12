@@ -136,9 +136,12 @@ When run with no arguments in a terminal, launches a live TUI dashboard:
 - **o** to start indefinite caffeinate
 - **x** to stop caffeinate
 - **t** to start a timed session (prompts for duration)
+- **f** to toggle [custom flags](#custom-flags) (e.g. enable display sleep prevention)
 - **q** to quit (caffeinate keeps running)
 
-The dashboard updates every second — you can watch a countdown tick in real time. When piped or in a non-TTY context, falls back to `latte status`.
+The dashboard updates every second — you can watch a countdown tick in real time. Press **f** to open the flag picker — toggle flags with their letter keys (`d`, `i`, `m`, `s`, `u`), then **Enter** to confirm or **Esc** to cancel. Your selections persist for the TUI session and apply to every subsequent start. The flag picker also respects `LATTE_FLAGS`.
+
+When piped or in a non-TTY context, falls back to `latte status`.
 
 ### Collision handling
 
