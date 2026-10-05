@@ -44,6 +44,19 @@ bun build --compile --target=bun-darwin-arm64 ./src/index.ts --outfile latte-dar
 echo "Building latte-darwin-x64..."
 bun build --compile --target=bun-darwin-x64 ./src/index.ts --outfile latte-darwin-x64
 
+for BINARY in latte-darwin-arm64 latte-darwin-x64; do
+  codesign --force --sign - "$BINARY"
+  codesign --verify --strict "$BINARY"
+  if ! BUILT_VERSION=$("./$BINARY" --version); then
+    echo "Error: $BINARY failed to start. Release aborted." >&2
+    exit 1
+  fi
+  if [[ "$BUILT_VERSION" != "$NEW_VERSION" ]]; then
+    echo "Error: $BINARY reported version '$BUILT_VERSION', expected '$NEW_VERSION'." >&2
+    exit 1
+  fi
+done
+
 # Commit, tag, push
 git add package.json
 git commit -m "chore: bump version to ${NEW_VERSION}"

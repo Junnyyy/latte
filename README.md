@@ -223,7 +223,7 @@ bun run typecheck               # type check
 
 ### Releasing
 
-Requires the [GitHub CLI](https://cli.github.com) (`gh`).
+Requires the [GitHub CLI](https://cli.github.com) (`gh`) and an Apple Silicon Mac with Rosetta to test both architectures.
 
 ```sh
 bun run release patch           # 0.1.0 -> 0.1.1
@@ -231,7 +231,9 @@ bun run release minor           # 0.1.0 -> 0.2.0
 bun run release major           # 0.1.0 -> 1.0.0
 ```
 
-This bumps `package.json` version, cross-compiles darwin arm64 and x64 binaries, commits, tags, pushes, and creates a GitHub Release with both binaries attached.
+This bumps `package.json` version and cross-compiles darwin arm64 and x64 binaries. It ad-hoc signs both executables, verifies their signatures, and checks their versions before it commits, tags, pushes, and creates a GitHub Release.
+
+To build and check locally without publishing, run `bun run build` and `./latte --version`. Ad-hoc signing prevents invalid-signature startup failures. It does not notarize the executable.
 
 ## License
 
