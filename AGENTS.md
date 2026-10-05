@@ -26,6 +26,9 @@ Compile release candidates separately until publishing is authorized.
 Preserve the `latte-darwin-arm64` and `latte-darwin-x64` asset names. The installer
 selects those names directly. Before publishing, verify both signatures and run
 both binaries. Running x64 binaries on Apple Silicon requires Rosetta.
+Check Rosetta before starting a release with `arch -x86_64 /usr/bin/true`.
+If it reports `Bad CPU type in executable`, install Rosetta before running the
+release script, which updates `package.json` before testing the binaries.
 
 The installer must verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
