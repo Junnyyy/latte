@@ -23,6 +23,8 @@ case "$MODE" in
     ;;
   compile)
     bun build ./src/index.ts --compile --outfile latte
+    codesign --force --sign - latte
+    codesign --verify --strict latte
     ln -sf "$(pwd)/latte" "$BIN_PATH"
     echo "Installed: $BIN_PATH -> ./latte (compiled)"
     ;;

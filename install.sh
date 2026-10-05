@@ -108,12 +108,18 @@ if ! curl -fsSL "$URL" -o "$TMPFILE"; then
 fi
 
 chmod +x "$TMPFILE"
+if ! INSTALLED_VERSION=$("$TMPFILE" --version); then
+  err "Downloaded $BINARY failed to start. Existing installation was not changed."
+  exit 1
+fi
+if [ "$INSTALLED_VERSION" != "${TAG#v}" ]; then
+  err "Downloaded $BINARY reported version '$INSTALLED_VERSION', expected '${TAG#v}'."
+  exit 1
+fi
 mv -f "$TMPFILE" "$BIN_PATH"  # rename(2) atomically replaces symlinks without following
 TMPFILE=""  # Disarm cleanup trap — binary is installed
 
 # --- Step 5: Confirm and advise ---
-
-INSTALLED_VERSION="$("$BIN_PATH" --version 2>/dev/null || echo "$TAG")"
 
 if [ "$INSTALL_TYPE" = "update" ] && [ -n "$CURRENT_VERSION" ]; then
   log "Updated latte: $CURRENT_VERSION -> $INSTALLED_VERSION"

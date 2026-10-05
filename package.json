@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun build ./src/index.ts --compile --outfile latte",
+    "build": "bun build ./src/index.ts --compile --outfile latte && codesign --force --sign - latte && codesign --verify --strict latte",
     "typecheck": "bunx tsc --noEmit",
     "link": "./scripts/install.sh link",
     "install:global": "./scripts/install.sh compile",
