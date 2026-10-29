@@ -63,7 +63,7 @@ Each drive writes a numbered step dir inside the run dir, such as `<run dir>/03-
 
 - `cmd.txt` holds the exact `latte` invocation and `LATTE_FLAGS`.
 - `stdout.txt`, `stderr.txt`, and `exit.txt` come from `cli` drives. stdout keeps latte's color codes, so search the summary the helper prints, or strip the codes first.
-- `steps.txt`, `drive.exp`, `transcript.raw`, and `transcript.txt` come from `pty` drives. The `.txt` transcript has color codes removed and contains every frame Ink drew, in order.
+- `steps.txt`, `drive.exp`, `transcript.raw`, and `transcript.txt` come from `pty` drives. The `.txt` transcript has color codes removed and contains every frame Ink drew, in order. A failed step writes its reason to `expect.stderr`, never to the transcript.
 - `caffeinate-before.txt` and `caffeinate-after.txt` list each live `caffeinate` with PID, start time, and arguments. This is the side effect. A proof cites it, not only the printed message.
 
 Proof standards:

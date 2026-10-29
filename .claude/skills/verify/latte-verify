@@ -207,7 +207,7 @@ cmd_pty() {
     echo 'set timeout 10'
     echo "log_file -noappend $(tcl_quote "$dir/transcript.raw")"
     echo "spawn -noecho /bin/bash -c $(tcl_quote "set -m; stty rows 40 cols 100;$argv")"
-    echo 'proc fail {msg} { send_user "\nlatte-verify: $msg\n"; send "\003"; exit 1 }'
+    echo 'proc fail {msg} { puts stderr "latte-verify: $msg"; catch { send "\003" }; exit 1 }'
     for step in "${steps[@]}"; do
       case "$step" in
         wait:*)
