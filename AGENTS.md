@@ -17,6 +17,23 @@ Sign compiled macOS executables explicitly and verify the signature before use.
 Test the compiled executable itself. Source execution and unit tests cannot prove
 that macOS accepts its signature.
 
+## Verifying behavior
+
+Use the `verify` skill in `.claude/skills/verify/` to drive the built binary and
+capture evidence. Its feature map lists each user path and the output that proves it.
+
+latte's only state is the system-wide `caffeinate` process. `latte off` and the
+TUI stop every `caffeinate` the user owns, including ones latte did not start.
+Never drive `on`, `off`, a duration, or the TUI while another `caffeinate` runs.
+
+A `caffeinate` started from the TUI is in latte's process group. If latte is the
+session leader of its terminal, a hangup kills that `caffeinate` too. Run latte
+under a job-control shell in a PTY, as a terminal tab does, or quit-then-check
+results are wrong.
+
+Ink draws its first frame before it reads the keyboard. A key sent before then is
+echoed as text and lost. Wait for a frame, then pause briefly before sending keys.
+
 ## Release boundaries
 
 `bun run release patch` bumps the version, builds, commits, tags, pushes, and
