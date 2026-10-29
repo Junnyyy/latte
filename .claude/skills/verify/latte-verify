@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=en_US.UTF-8
+
+SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(git -C "$SKILL_DIR" rev-parse --show-toplevel)"
+TMP_ROOT="${TMPDIR:-/tmp}"
+VERIFY_ROOT="${LATTE_VERIFY_ROOT:-${TMP_ROOT%/}/latte-verify}"
+
+usage() {
+  cat <<'EOF'
+usage:
+  latte-verify new                       create a run dir and print its path
+  LATTE_VERIFY_RUN=<dir> latte-verify build
+  LATTE_VERIFY_RUN=<dir> latte-verify doctor
+  LATTE_VERIFY_RUN=<dir> latte-verify cli <label> -- <latte args...>
+  LATTE_VERIFY_RUN=<dir> latte-verify pty <label> <step...> [-- <latte args...>]
+  LATTE_VERIFY_RUN=<dir> latte-verify cleanup
+
+cli runs latte with stdin from /dev/null: no TTY, so prompts auto-confirm.
+pty runs latte in a 100x40 pseudo-terminal: no args opens the TUI.
+
+pty steps:
+  wait:<text>   block until <text> appears (10s timeout), then let Ink settle 0.3s
+  send:<text>   type <text> one character at a time
+  key:enter | key:esc | key:ctrl-c
+  sleep:<sec>   pause
+EOF
+  exit 64
+}
+
+die() { echo "latte-verify: $*" >&2; exit 1; }
+
+run_dir() {
+  [[ -n "${LATTE_VERIFY_RUN:-}" ]] || die "set LATTE_VERIFY_RUN to the path printed by 'latte-verify new'"
+  [[ -d "$LATTE_VERIFY_RUN" ]] || die "run dir $LATTE_VERIFY_RUN does not exist"
+  echo "$LATTE_VERIFY_RUN"
+}
+
+caffeinate_pids() { pgrep -x caffeinate || true; }
+
+caffeinate_table() {
+  local pids
+  pids="$(caffeinate_pids | paste -sd, -)"
+  [[ -z "$pids" ]] && { echo "(none)"; return; }
+  ps -o pid=,lstart=,args= -p "$pids" || true
+}
+
+foreign_pids() {
+  local run="$1"
+  caffeinate_pids | grep -vxF -f "$run/ours.pids" || true
+}
+
+require_no_foreign() {
+  local run="$1" foreign
+  foreign="$(foreign_pids "$run")"
+  if [[ -n "$foreign" ]]; then
+    echo "latte-verify: refusing a mutating drive. caffeinate not started by this run is alive:" >&2
+    ps -o pid=,lstart=,args= -p "$(echo "$foreign" | paste -sd, -)" >&2
+    echo "latte-verify: 'latte off' and the TUI would kill it. Ask the user before stopping it." >&2
+    exit 3
+  fi
+}
+
+record_new_pids() {
+  local run="$1" before="$2"
+  caffeinate_pids | grep -vxF -f "$before" | grep -vxF -f "$run/ours.pids" >> "$run/ours.pids" || true
+}
+
+step_dir() {
+  local run="$1" kind="$2" label="$3" n
+  n="$(find "$run" -maxdepth 1 -type d -name '[0-9][0-9]-*' | wc -l | tr -d ' ')"
+  local dir
+  dir="$run/$(printf '%02d' $((n + 1)))-$kind-${label//[^A-Za-z0-9_-]/_}"
+  mkdir -p "$dir"
+  echo "$dir"
+}
+
+expected_version() {
+  sed -n 's/^  "version": "\(.*\)",$/\1/p' "$REPO_ROOT/package.json"
+}
+
+record_cmd() {
+  printf 'LATTE_FLAGS=%q latte' "${LATTE_FLAGS:-}"
+  [[ $# -gt 0 ]] && printf ' %q' "$@"
+  echo
+}
+
+is_mutating() {
+  case "${1:-}" in
+    on|off) return 0 ;;
+    *) [[ "${1:-}" =~ ^[0-9]+[smhSMH]$ ]] ;;
+  esac
+}
+
+cmd_new() {
+  local run="$VERIFY_ROOT/run-$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir -p "$run"
+  : > "$run/ours.pids"
+  git -C "$REPO_ROOT" rev-parse HEAD > "$run/revision.txt"
+  git -C "$REPO_ROOT" status --porcelain > "$run/worktree-status.txt"
+  echo "$run"
+}
+
+cmd_build() {
+  local run; run="$(run_dir)"
+  PATH="$PATH:$HOME/.bun/bin"
+  command -v bun >/dev/null || die "bun is not on PATH or in ~/.bun/bin. Install Bun before building."
+  (cd "$REPO_ROOT" && bun install --frozen-lockfile && bun run build) 2>&1 | tee "$run/build.log"
+  cp "$REPO_ROOT/latte" "$run/latte"
+  shasum -a 256 "$run/latte" | cut -d' ' -f1 > "$run/latte.sha256"
+  echo "built $run/latte ($(cat "$run/latte.sha256"))"
+}
+
+cmd_doctor() {
+  local run; run="$(run_dir)"
+  local bin="$run/latte" ok=0 status=0
+  echo "run:        $run"
+  echo "revision:   $(cat "$run/revision.txt")"
+  if [[ ! -x "$bin" ]]; then
+    echo "binary:     MISSING. Run 'latte-verify build'."
+    exit 1
+  fi
+  if [[ "$(shasum -a 256 "$bin" | cut -d' ' -f1)" == "$(cat "$run/latte.sha256")" ]]; then
+    echo "binary:     $bin (sha256 matches build)"
+  else
+    echo "binary:     $bin CHANGED since build"; ok=1
+  fi
+  if codesign --verify --strict "$bin" 2>/dev/null; then
+    echo "signature:  valid"
+  else
+    echo "signature:  INVALID (macOS will SIGKILL it at launch)"; ok=1
+  fi
+  local version expected
+  version="$("$bin" --version </dev/null 2>&1)" || status=$?
+  expected="$(expected_version)"
+  if [[ "$status" -eq 0 && "$version" == "$expected" ]]; then
+    echo "version:    $version"
+  else
+    echo "version:    got '$version' (exit $status), want '$expected'"; ok=1
+  fi
+  echo "caffeinate: ours=[$(paste -sd' ' - < "$run/ours.pids")]"
+  caffeinate_table | sed 's/^/  /'
+  if [[ -n "$(foreign_pids "$run")" ]]; then
+    echo "mutating:   BLOCKED. A caffeinate this run did not start is alive."
+    [[ "$ok" -eq 0 ]] && exit 2
+  else
+    echo "mutating:   safe"
+  fi
+  exit "$ok"
+}
+
+cmd_cli() {
+  local run; run="$(run_dir)"
+  local label="${1:-}"; shift || true
+  [[ -n "$label" && "${1:-}" == "--" ]] || usage
+  shift
+  is_mutating "${1:-}" && require_no_foreign "$run"
+  local dir; dir="$(step_dir "$run" cli "$label")"
+  record_cmd "$@" > "$dir/cmd.txt"
+  caffeinate_table > "$dir/caffeinate-before.txt"
+  caffeinate_pids > "$dir/.before"
+  local status=0
+  "$run/latte" "$@" </dev/null >"$dir/stdout.txt" 2>"$dir/stderr.txt" || status=$?
+  echo "$status" > "$dir/exit.txt"
+  sleep 0.3
+  record_new_pids "$run" "$dir/.before"
+  rm "$dir/.before"
+  caffeinate_table > "$dir/caffeinate-after.txt"
+  for f in cmd stdout stderr exit caffeinate-after; do
+    echo "== $f"; strip_ansi "$dir/$f.txt"
+  done
+  echo "== evidence: $dir"
+}
+
+strip_ansi() { perl -pe 's/\e\[[0-9;?]*[ -\/]*[@-~]//g; s/\e[()][0-9A-Za-z]//g; s/\r//g' "$1"; }
+
+styled_text_regex() {
+  local text="$1" out="" c i
+  for ((i = 0; i < ${#text}; i++)); do
+    c="${text:i:1}"
+    [[ "$c" == [\\^\$.\|?*+\(\)\[\]\{\}] ]] && c="\\$c"
+    [[ $i -gt 0 ]] && out+='(?:\x1b\[[0-9;]*m)*'
+    out+="$c"
+  done
+  printf '%s' "$out"
+}
+
+tcl_quote() { printf '"%s"' "$(printf '%s' "$1" | sed 's/[][\\$"]/\\&/g')"; }
+
+cmd_pty() {
+  local run; run="$(run_dir)"
+  local label="${1:-}"; shift || true
+  local steps=()
+  while [[ $# -gt 0 && "$1" != "--" ]]; do steps+=("$1"); shift; done
+  [[ "${1:-}" == "--" ]] && shift
+  [[ -n "$label" && ${#steps[@]} -gt 0 ]] || usage
+  local step
+  for step in "${steps[@]}"; do
+    [[ "$step" =~ ^(wait:.+|send:.+|key:(enter|esc|ctrl-c)|sleep:[0-9.]+)$ ]] || die "unknown pty step '$step'. Type letters with send:<text>."
+  done
+  require_no_foreign "$run"
+  local dir; dir="$(step_dir "$run" pty "$label")"
+  local argv; argv="$(printf ' %q' "$run/latte" "$@")"
+  local script="$dir/drive.exp"
+  {
+    echo 'set timeout 10'
+    echo "log_file -noappend $(tcl_quote "$dir/transcript.raw")"
+    echo "spawn -noecho /bin/bash -c $(tcl_quote "set -m; stty rows 40 cols 100;$argv")"
+    echo 'proc fail {msg} { puts stderr "latte-verify: $msg"; catch { send "\003" }; exit 1 }'
+    for step in "${steps[@]}"; do
+      case "$step" in
+        wait:*)
+          local want="${step#wait:}"
+          printf 'expect {\n  -re %s { sleep 0.3 }\n  timeout { fail %s }\n  eof { fail %s }\n}\n' \
+            "$(tcl_quote "$(styled_text_regex "$want")")" "$(tcl_quote "timed out waiting for '$want'")" "$(tcl_quote "latte exited while waiting for '$want'")" ;;
+        send:*)
+          local text="${step#send:}" i
+          for ((i = 0; i < ${#text}; i++)); do
+            echo "send -- $(tcl_quote "${text:i:1}"); sleep 0.1"
+          done ;;
+        key:enter) echo 'send -- "\r"; sleep 0.1' ;;
+        key:esc) echo 'send -- "\033"; sleep 0.3' ;;
+        key:ctrl-c) echo 'send -- "\003"; sleep 0.1' ;;
+        sleep:*) echo "sleep ${step#sleep:}" ;;
+      esac
+    done
+    printf 'expect {\n  eof {}\n  timeout { fail "latte still running after the last step. End TUI steps with send:q." }\n}\n'
+  } > "$script"
+  record_cmd "$@" > "$dir/cmd.txt"
+  printf '%q\n' "${steps[@]}" > "$dir/steps.txt"
+  caffeinate_table > "$dir/caffeinate-before.txt"
+  caffeinate_pids > "$dir/.before"
+  local status=0
+  expect -f "$script" >/dev/null 2>"$dir/expect.stderr" || status=$?
+  echo "$status" > "$dir/exit.txt"
+  sleep 0.3
+  record_new_pids "$run" "$dir/.before"
+  rm "$dir/.before"
+  caffeinate_table > "$dir/caffeinate-after.txt"
+  strip_ansi "$dir/transcript.raw" > "$dir/transcript.txt"
+  echo "== cmd"; cat "$dir/cmd.txt"
+  echo "== steps"; cat "$dir/steps.txt"
+  echo "== exit"; cat "$dir/exit.txt"
+  [[ -s "$dir/expect.stderr" ]] && { echo "== expect"; cat "$dir/expect.stderr"; }
+  echo "== last frame"; tail -n 12 "$dir/transcript.txt"
+  echo "== caffeinate-after"; cat "$dir/caffeinate-after.txt"
+  echo "== evidence: $dir"
+  return "$status"
+}
+
+cmd_cleanup() {
+  local run; run="$(run_dir)"
+  local pid
+  while read -r pid; do
+    [[ -z "$pid" ]] && continue
+    if [[ "$(ps -o comm= -p "$pid" 2>/dev/null)" == *caffeinate ]]; then
+      kill "$pid" && echo "killed $pid"
+    else
+      echo "gone   $pid"
+    fi
+  done < "$run/ours.pids" | tee "$run/cleanup.txt"
+  echo "caffeinate after cleanup:" | tee -a "$run/cleanup.txt"
+  caffeinate_table | tee -a "$run/cleanup.txt"
+  echo "evidence kept in $run"
+}
+
+case "${1:-}" in
+  new) cmd_new ;;
+  build) cmd_build ;;
+  doctor) cmd_doctor ;;
+  cli) shift; cmd_cli "$@" ;;
+  pty) shift; cmd_pty "$@" ;;
+  cleanup) cmd_cleanup ;;
+  *) usage ;;
+esac
