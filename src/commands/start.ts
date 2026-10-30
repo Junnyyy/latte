@@ -39,7 +39,7 @@ export const startHandler = ({ selection, duration }: StartRequest) =>
     }
 
     const flags = resolveFlags(selection)
-    yield* svc.start(seconds, flags)
+    yield* svc.start({ flags, duration: seconds })
     const length = seconds !== undefined ? ` for ${formatDuration(seconds)}` : ""
     yield* Console.log(`${bold("☕")} ${green("On")}${length} — ${describeFlags(flags)}`)
     if (selection.kind === "preset") yield* Console.log(dim(PRESET_LID_NOTE))

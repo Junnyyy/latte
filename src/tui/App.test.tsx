@@ -10,6 +10,7 @@ const activeInfo: CaffeinateInfo = {
   startTime: new Date(Date.now() - 60_000), // started 1 min ago
   duration: null,
   remaining: null,
+  watching: null,
 }
 
 const timedInfo: CaffeinateInfo = {
@@ -18,6 +19,7 @@ const timedInfo: CaffeinateInfo = {
   startTime: new Date(Date.now() - 60_000),
   duration: 1800,
   remaining: 1740,
+  watching: null,
 }
 
 const noop = async (_duration?: number, _flags?: string): Promise<TuiResult> => ({ ok: true, info: null })
