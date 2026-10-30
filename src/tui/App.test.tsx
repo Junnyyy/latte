@@ -269,6 +269,35 @@ describe("App", () => {
     expect(starts).toEqual([])
   })
 
+  test("cancelling while an app resolves starts nothing", async () => {
+    let finish: (result: WatchResult) => void = () => {}
+    const onResolveWatch = (_query: string) => new Promise<WatchResult>((resolve) => { finish = resolve })
+    const starts: StartSpec[] = []
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
+      starts.push(spec)
+      return { ok: true, info: activeInfo }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    finish({ ok: true, target: cursor })
+    await wait()
+
+    expect(starts).toEqual([])
+    expect(lastFrame()).toContain("Inactive")
+    expect(lastFrame()).not.toContain("Stay awake while:")
+  })
+
   test("waiting for an app during a session replaces it after confirm", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {
