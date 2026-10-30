@@ -7,22 +7,29 @@ import { promptYesNo } from "../utils/prompt.ts"
 import { describeFlags, PRESET_LID_NOTE, type Selection } from "../utils/flags.ts"
 import { resolveFlags } from "../utils/resolveFlags.ts"
 
-export const timedHandler = (durationStr: string, selection: Selection) =>
+export interface StartRequest {
+  selection: Selection
+  /** A duration such as "30m". Without one the session is indefinite. */
+  duration?: string
+}
+
+export const startHandler = ({ selection, duration }: StartRequest) =>
   Effect.gen(function* () {
-    const seconds = yield* parseDuration(durationStr)
+    const seconds = duration === undefined ? undefined : yield* parseDuration(duration)
     const svc = yield* CaffeinateService
     const existing = yield* svc.detect()
 
     if (Option.isSome(existing)) {
-      const { startTime, duration } = existing.value
+      const { startTime, duration: running } = existing.value
       const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000)
-      const durationLabel = duration !== null ? formatDuration(duration) : "indefinite"
+      const runningLabel = running !== null ? formatDuration(running) : "indefinite"
 
       yield* Console.log(
-        `${yellow("⚠")} Caffeinate is already running (${formatDuration(elapsed)}, ${durationLabel})`,
+        `${yellow("⚠")} Caffeinate is already running (${formatDuration(elapsed)}, ${runningLabel})`,
       )
 
-      const confirmed = yield* Effect.promise(() => promptYesNo(`Kill existing and start ${formatDuration(seconds)} timer?`))
+      const next = seconds !== undefined ? `${formatDuration(seconds)} timer` : "indefinite"
+      const confirmed = yield* Effect.promise(() => promptYesNo(`Kill existing and start ${next}?`))
       if (!confirmed) {
         yield* Console.log("Cancelled.")
         return
@@ -33,13 +40,11 @@ export const timedHandler = (durationStr: string, selection: Selection) =>
 
     const flags = resolveFlags(selection)
     yield* svc.start(seconds, flags)
-    yield* Console.log(`${bold("☕")} ${green("On")} for ${formatDuration(seconds)} — ${describeFlags(flags)}`)
+    const length = seconds !== undefined ? ` for ${formatDuration(seconds)}` : ""
+    yield* Console.log(`${bold("☕")} ${green("On")}${length} — ${describeFlags(flags)}`)
     if (selection.kind === "preset") yield* Console.log(dim(PRESET_LID_NOTE))
   }).pipe(
-    Effect.catchAll((e) => {
-      if ("_tag" in e && e._tag === "DurationParseError") {
-        return fail(`${e.message}`)
-      }
-      return fail(`Error: ${"message" in e ? e.message : String(e)}`)
-    }),
+    Effect.catchAll((e) =>
+      e._tag === "DurationParseError" ? fail(e.message) : fail(`Error: ${e.message}`),
+    ),
   )

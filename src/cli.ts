@@ -1,7 +1,7 @@
 import { Command, Options } from "@effect/cli"
 import { Either, Option } from "effect"
-import { onHandler } from "./commands/on.ts"
 import { offHandler } from "./commands/off.ts"
+import { startHandler } from "./commands/start.ts"
 import { statusHandler } from "./commands/status.ts"
 import { tuiHandler } from "./commands/tui.ts"
 import { fail } from "./utils/exit.ts"
@@ -22,7 +22,7 @@ const onCommand = Command.make(
   ({ screen, flags }) =>
     Either.match(toSelection({ screen, flags: Option.getOrUndefined(flags) }), {
       onLeft: (e) => fail(e.message),
-      onRight: onHandler,
+      onRight: (selection) => startHandler({ selection }),
     }),
 )
 

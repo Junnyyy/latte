@@ -3,8 +3,7 @@ import { Effect, Layer } from "effect"
 import { CaffeinateService } from "../services/Caffeinate.ts"
 import { ProcessService } from "../services/Process.ts"
 import { ProcessError } from "../errors/index.ts"
-import { onHandler } from "./on.ts"
-import { timedHandler } from "./timed.ts"
+import { startHandler } from "./start.ts"
 
 const originalEnv = process.env.LATTE_FLAGS
 beforeEach(() => {
@@ -39,7 +38,7 @@ const runStart = async (effect: Effect.Effect<void, never, CaffeinateService>) =
 
 describe("latte on", () => {
   test("starts the awake preset and warns about the lid", async () => {
-    const { spawned, lines } = await runStart(onHandler({ kind: "preset", preset: "awake" }))
+    const { spawned, lines } = await runStart(startHandler({ selection: { kind: "preset", preset: "awake" } }))
     expect(spawned).toEqual(["caffeinate", "-is"])
     expect(lines).toEqual([
       "☕ On — Mac stays awake, screen can sleep",
@@ -48,13 +47,13 @@ describe("latte on", () => {
   })
 
   test("--screen keeps the screen on", async () => {
-    const { spawned, lines } = await runStart(onHandler({ kind: "preset", preset: "screen" }))
+    const { spawned, lines } = await runStart(startHandler({ selection: { kind: "preset", preset: "screen" } }))
     expect(spawned).toEqual(["caffeinate", "-dis"])
     expect(lines[0]).toBe("☕ On — Mac and screen stay awake")
   })
 
   test("custom flags name their modes and skip the lid note", async () => {
-    const { spawned, lines } = await runStart(onHandler({ kind: "custom", flags: new Set(["m", "d"]) }))
+    const { spawned, lines } = await runStart(startHandler({ selection: { kind: "custom", flags: new Set(["m", "d"]) } }))
     expect(spawned).toEqual(["caffeinate", "-dm"])
     expect(lines).toEqual(["☕ On — custom flags -dm (display, disk)"])
   })
@@ -62,7 +61,7 @@ describe("latte on", () => {
 
 describe("latte <duration>", () => {
   test("starts a timed preset session", async () => {
-    const { spawned, lines } = await runStart(timedHandler("30m", { kind: "preset", preset: "awake" }))
+    const { spawned, lines } = await runStart(startHandler({ selection: { kind: "preset", preset: "awake" }, duration: "30m" }))
     expect(spawned).toEqual(["caffeinate", "-is", "-t", "1800"])
     expect(lines).toEqual([
       "☕ On for 30m — Mac stays awake, screen can sleep",
