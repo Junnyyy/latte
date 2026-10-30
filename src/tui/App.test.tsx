@@ -183,7 +183,7 @@ describe("App", () => {
     stdin.write("f")
     await wait()
 
-    // Default flags are imsu (d is off). Toggle d on.
+    // Default flags are is (d is off). Toggle d on.
     stdin.write("d")
     await wait()
 
@@ -235,7 +235,7 @@ describe("App", () => {
     stdin.write("o")
     await wait()
 
-    expect(startFlags).toBe("-imsu")
+    expect(startFlags).toBe("-is")
   })
 
   test("onStart receives session flags after picker confirm", async () => {
@@ -261,6 +261,6 @@ describe("App", () => {
     stdin.write("o")
     await wait()
 
-    expect(startFlags).toBe("-dimsu")
+    expect(startFlags).toBe("-dis")
   })
 })

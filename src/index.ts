@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { ValidationError } from "@effect/cli"
-import { Effect, Layer } from "effect"
+import { Effect, Either, Layer } from "effect"
 import { cli } from "./cli.ts"
 import { timedHandler } from "./commands/timed.ts"
 import { CaffeinateService } from "./services/Caffeinate.ts"
 import { ProcessService } from "./services/Process.ts"
-import { parseArgvFlags } from "./utils/resolveFlags.ts"
+import { fail } from "./utils/exit.ts"
+import { parseSelectionArgs } from "./utils/resolveFlags.ts"
 
 const AppLayer = CaffeinateService.Default.pipe(
   Layer.provideMerge(ProcessService.Default),
@@ -21,10 +22,10 @@ const durationPattern = /^\d+(s|m|h)$/i
 const firstArg = userArgs[0]
 
 const program = firstArg && durationPattern.test(firstArg)
-  ? (() => {
-      const { adds, removes } = parseArgvFlags(userArgs.slice(1))
-      return timedHandler(firstArg, adds, removes).pipe(Effect.provide(MainLayer))
-    })()
+  ? Either.match(parseSelectionArgs(userArgs.slice(1)), {
+      onLeft: (e) => fail(e.message),
+      onRight: (selection) => timedHandler(firstArg, selection).pipe(Effect.provide(MainLayer)),
+    })
   : cli(process.argv).pipe(
       Effect.provide(MainLayer),
       Effect.catchIf(

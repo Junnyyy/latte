@@ -7,14 +7,15 @@ import { ConfirmDialog } from "./components/ConfirmDialog.tsx"
 import { DurationInput } from "./components/DurationInput.tsx"
 import { FlagPicker } from "./components/FlagPicker.tsx"
 import { parseDuration } from "../utils/duration.ts"
-import { initialFlagSet, flagSetToString } from "../utils/resolveFlags.ts"
+import { flagSetToString, type Flag } from "../utils/flags.ts"
+import { initialFlagSet } from "../utils/resolveFlags.ts"
 import { Effect } from "effect"
 
 type Mode = "idle" | "confirm-on" | "confirm-timed" | "duration-input" | "flag-picker" | "error"
 
 export interface Props {
   initialInfo: CaffeinateInfo | null
-  onStart: (duration?: number, flags?: string) => Promise<TuiResult>
+  onStart: (duration: number | undefined, flags: string) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
   onDetect: () => Promise<CaffeinateInfo | null>
 }
@@ -35,8 +36,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingDuration, setPendingDuration] = useState<number | undefined>(undefined)
   const [durationError, setDurationError] = useState<string | null>(null)
-  const [sessionFlags, setSessionFlags] = useState<Set<string>>(() => initialFlagSet())
-  const [pickerFlags, setPickerFlags] = useState<Set<string>>(new Set())
+  const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
+  const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
   // Tick elapsed every second, re-detect process liveness
   useEffect(() => {
@@ -115,7 +116,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   }, [info, handleStart])
 
   // Flag picker handlers
-  const handleFlagToggle = useCallback((flag: string) => {
+  const handleFlagToggle = useCallback((flag: Flag) => {
     setPickerFlags((prev) => {
       const next = new Set(prev)
       if (next.has(flag)) {
