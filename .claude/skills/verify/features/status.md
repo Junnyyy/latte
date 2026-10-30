@@ -1,12 +1,12 @@
 # Status
 
-Status tells the user whether a `caffeinate` is running, which sleep modes it holds, how long it has run, and how long remains.
+Status tells the user whether a `caffeinate` is running, which preset or flags it holds, how long it has run, and how long remains.
 
 ## Sub-features
 
 - `status-idle` reports that nothing is running.
-- `status-indefinite` reports modes, elapsed time, and `Duration: indefinite`.
-- `status-timed` reports modes, elapsed time, and `Remaining:`.
+- `status-indefinite` reports the preset or flags, elapsed time, and `Duration: indefinite`.
+- `status-timed` reports the preset or flags, elapsed time, and `Remaining:`.
 - `status-root-notty` shows the same report for bare `latte` when stderr is not a terminal.
 
 ## How to get to it (user POV)
@@ -22,8 +22,8 @@ Preconditions:
 
 - **Idle.** Run `V cli status-idle -- status`. stdout reads `☕ No caffeinate running` and exit is `0`.
 - **Bare latte without a TTY.** Run `V cli root-notty --`. stdout matches the idle report, and no TUI frame is drawn.
-- **Indefinite.** Run `V cli start -- on`, then `V cli status-on -- status`. stdout reads `Active — preventing sleep`, `Modes: idle, disk, system (AC), wake display`, `Running for:`, and `Duration: indefinite`.
-- **Timed.** Run `V cli start -- 2m`, then `V cli status-timed -- status`. stdout shows `Remaining:` under `2m`. `caffeinate-after.txt` shows `caffeinate -imsu -t 120`.
+- **Indefinite.** Run `V cli start -- on`, then `V cli status-on -- status`. stdout reads `☕ Active — Mac stays awake, screen can sleep`, `Running for:`, and `Duration: indefinite`. It has no `Modes:` line.
+- **Timed.** Run `V cli start -- 2m`, then `V cli status-timed -- status`. stdout shows `Remaining:` under `2m`. `caffeinate-after.txt` shows `caffeinate -is -t 120`.
 - **Clean up.** Run `V cleanup`.
 
 ## Gotchas

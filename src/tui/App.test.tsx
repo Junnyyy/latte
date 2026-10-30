@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe, beforeEach, afterEach } from "bun:test"
 import React from "react"
 import { render } from "ink-testing-library"
 import { App } from "./App.tsx"
@@ -6,7 +6,7 @@ import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
 
 const activeInfo: CaffeinateInfo = {
   pid: 42,
-  flags: "-imsu",
+  flags: "-is",
   startTime: new Date(Date.now() - 60_000), // started 1 min ago
   duration: null,
   remaining: null,
@@ -14,7 +14,7 @@ const activeInfo: CaffeinateInfo = {
 
 const timedInfo: CaffeinateInfo = {
   pid: 42,
-  flags: "-imsu",
+  flags: "-is",
   startTime: new Date(Date.now() - 60_000),
   duration: 1800,
   remaining: 1740,
@@ -22,6 +22,15 @@ const timedInfo: CaffeinateInfo = {
 
 const noop = async (_duration?: number, _flags?: string): Promise<TuiResult> => ({ ok: true, info: null })
 const noopDetect = async () => null
+
+const originalEnv = process.env.LATTE_FLAGS
+beforeEach(() => {
+  delete process.env.LATTE_FLAGS
+})
+afterEach(() => {
+  if (originalEnv === undefined) delete process.env.LATTE_FLAGS
+  else process.env.LATTE_FLAGS = originalEnv
+})
 
 function wait(ms: number = 50): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -146,13 +155,132 @@ describe("App", () => {
     expect(frame).toContain("Active")
   })
 
-  test("shows action bar with flags keybind", () => {
+  test("shows the screen toggle off and the advanced picker in the action bar", () => {
     const { lastFrame } = render(
       <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
     )
     const frame = lastFrame()
-    expect(frame).toContain("[f]")
-    expect(frame).toContain("flags")
+    expect(frame).toContain("[s] screen ○")
+    expect(frame).toContain("[f] advanced")
+  })
+
+  test("active state describes the preset", () => {
+    const { lastFrame } = render(
+      <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+    expect(lastFrame()).toContain("Mac stays awake, screen can sleep")
+  })
+
+  test("pressing s turns the screen on for the next start", async () => {
+    let startFlags: string | undefined
+    const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {
+      startFlags = flags
+      return { ok: true, info: { ...activeInfo, flags } }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).toContain("[s] screen ●")
+
+    stdin.write("o")
+    await wait()
+
+    expect(startFlags).toBe("-dis")
+    expect(lastFrame()).toContain("Mac and screen stay awake")
+  })
+
+  test("pressing s during a session says the change applies to the next start", async () => {
+    const { lastFrame, stdin } = render(
+      <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+    expect(lastFrame()).not.toContain("Next start")
+
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).toContain("Next start: Mac and screen stay awake. Press o or t to apply.")
+
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).not.toContain("Next start")
+  })
+
+  test("pressing s with no session shows no next-start line", async () => {
+    const { lastFrame, stdin } = render(
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
+    )
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).toContain("[s] screen ●")
+    expect(lastFrame()).not.toContain("Next start")
+  })
+
+  test("pressing s twice turns the screen back off", async () => {
+    let startFlags: string | undefined
+    const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {
+      startFlags = flags
+      return { ok: true, info: activeInfo }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("s")
+    await wait()
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).toContain("[s] screen ○")
+
+    stdin.write("o")
+    await wait()
+
+    expect(startFlags).toBe("-is")
+  })
+
+  test("the screen toggle and the picker share one flag set", async () => {
+    const { lastFrame, stdin } = render(
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("f")
+    await wait()
+    stdin.write("d")
+    await wait()
+    stdin.write("\r")
+    await wait()
+
+    expect(lastFrame()).toContain("[s] screen ●")
+  })
+
+  test("picker reset returns to the awake preset", async () => {
+    let startFlags: string | undefined
+    const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {
+      startFlags = flags
+      return { ok: true, info: activeInfo }
+    }
+
+    const { stdin } = render(
+      <App initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("s")
+    await wait()
+    stdin.write("f")
+    await wait()
+    stdin.write("m")
+    await wait()
+    stdin.write("r")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    stdin.write("o")
+    await wait()
+
+    expect(startFlags).toBe("-is")
   })
 
   test("pressing f opens flag picker and hides action bar", async () => {
@@ -183,13 +311,11 @@ describe("App", () => {
     stdin.write("f")
     await wait()
 
-    // Default flags are imsu (d is off). Toggle d on.
+    expect(lastFrame()).toContain("[d] display ○")
     stdin.write("d")
     await wait()
 
-    const frame = lastFrame()
-    expect(frame).toContain("display")
-    expect(frame).toContain("●")
+    expect(lastFrame()).toContain("[d] display ●")
   })
 
   test("confirming flag picker returns to idle", async () => {
@@ -235,7 +361,7 @@ describe("App", () => {
     stdin.write("o")
     await wait()
 
-    expect(startFlags).toBe("-imsu")
+    expect(startFlags).toBe("-is")
   })
 
   test("onStart receives session flags after picker confirm", async () => {
@@ -261,6 +387,6 @@ describe("App", () => {
     stdin.write("o")
     await wait()
 
-    expect(startFlags).toBe("-dimsu")
+    expect(startFlags).toBe("-dis")
   })
 })

@@ -2,7 +2,6 @@ import { Effect, Option } from "effect"
 import { CaffeinateSpawnError, NoCaffeinateError } from "../errors/index.ts"
 import { ProcessService } from "./Process.ts"
 import type { CaffeinateInfo } from "../types/index.ts"
-import { flagSetToString, DEFAULT_FLAGS } from "../utils/resolveFlags.ts"
 
 export class CaffeinateService extends Effect.Service<CaffeinateService>()("CaffeinateService", {
   effect: Effect.gen(function* () {
@@ -32,10 +31,9 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         return Option.some(parsePsLine(line))
       })
 
-    const start = (duration?: number, flags?: string): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
+    const start = (duration: number | undefined, flags: string): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
       Effect.gen(function* () {
-        const flagStr = flags ?? flagSetToString(DEFAULT_FLAGS)
-        const args = flagStr ? ["caffeinate", flagStr] : ["caffeinate"]
+        const args = flags ? ["caffeinate", flags] : ["caffeinate"]
         if (duration !== undefined) {
           args.push("-t", String(duration))
         }
@@ -55,7 +53,7 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         // Fallback: construct info from what we know
         return {
           pid,
-          flags: flagStr,
+          flags,
           startTime: new Date(),
           duration: duration ?? null,
           remaining: duration ?? null,

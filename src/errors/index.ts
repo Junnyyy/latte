@@ -16,3 +16,7 @@ export class DurationParseError extends Data.TaggedError("DurationParseError")<{
   input: string
   message: string
 }> {}
+
+export class SelectionError extends Data.TaggedError("SelectionError")<{
+  message: string
+}> {}

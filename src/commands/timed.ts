@@ -1,16 +1,13 @@
 import { Console, Effect, Option } from "effect"
 import { CaffeinateService } from "../services/Caffeinate.ts"
 import { fail } from "../utils/exit.ts"
-import { bold, green, yellow, dim } from "../utils/format.ts"
+import { bold, dim, green, yellow } from "../utils/format.ts"
 import { parseDuration, formatDuration } from "../utils/duration.ts"
 import { promptYesNo } from "../utils/prompt.ts"
-import { resolveFlags, buildHint } from "../utils/resolveFlags.ts"
+import { describeFlags, PRESET_LID_NOTE, type Selection } from "../utils/flags.ts"
+import { resolveFlags } from "../utils/resolveFlags.ts"
 
-export const timedHandler = (
-  durationStr: string,
-  cliAdds: Set<string> = new Set(),
-  cliRemoves: Set<string> = new Set(),
-) =>
+export const timedHandler = (durationStr: string, selection: Selection) =>
   Effect.gen(function* () {
     const seconds = yield* parseDuration(durationStr)
     const svc = yield* CaffeinateService
@@ -34,16 +31,10 @@ export const timedHandler = (
       yield* svc.kill().pipe(Effect.catchAll(() => Effect.void))
     }
 
-    const flags = resolveFlags(cliAdds, cliRemoves)
+    const flags = resolveFlags(selection)
     yield* svc.start(seconds, flags)
-    yield* Console.log(
-      `${bold("☕")} ${green("Caffeinate started")} — preventing sleep for ${formatDuration(seconds)}`,
-    )
-
-    const hint = buildHint(cliAdds, cliRemoves)
-    if (hint) {
-      yield* Console.log(dim(hint))
-    }
+    yield* Console.log(`${bold("☕")} ${green("On")} for ${formatDuration(seconds)} — ${describeFlags(flags)}`)
+    if (selection.kind === "preset") yield* Console.log(dim(PRESET_LID_NOTE))
   }).pipe(
     Effect.catchAll((e) => {
       if ("_tag" in e && e._tag === "DurationParseError") {

@@ -7,25 +7,25 @@ import { ConfirmDialog } from "./components/ConfirmDialog.tsx"
 import { DurationInput } from "./components/DurationInput.tsx"
 import { FlagPicker } from "./components/FlagPicker.tsx"
 import { parseDuration } from "../utils/duration.ts"
-import { initialFlagSet, flagSetToString } from "../utils/resolveFlags.ts"
+import { describeFlags, flagSetToString, type Flag } from "../utils/flags.ts"
+import { initialFlagSet } from "../utils/resolveFlags.ts"
 import { Effect } from "effect"
 
 type Mode = "idle" | "confirm-on" | "confirm-timed" | "duration-input" | "flag-picker" | "error"
 
 export interface Props {
   initialInfo: CaffeinateInfo | null
-  onStart: (duration?: number, flags?: string) => Promise<TuiResult>
+  onStart: (duration: number | undefined, flags: string) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
   onDetect: () => Promise<CaffeinateInfo | null>
 }
 
-const actions = [
-  { key: "o", label: "on" },
-  { key: "x", label: "off" },
-  { key: "t", label: "timed" },
-  { key: "f", label: "flags" },
-  { key: "q", label: "quit" },
-]
+const toggle = (flags: ReadonlySet<Flag>, flag: Flag): Set<Flag> => {
+  const next = new Set(flags)
+  if (next.has(flag)) next.delete(flag)
+  else next.add(flag)
+  return next
+}
 
 export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect }) => {
   const { exit } = useApp()
@@ -35,8 +35,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingDuration, setPendingDuration] = useState<number | undefined>(undefined)
   const [durationError, setDurationError] = useState<string | null>(null)
-  const [sessionFlags, setSessionFlags] = useState<Set<string>>(() => initialFlagSet())
-  const [pickerFlags, setPickerFlags] = useState<Set<string>>(new Set())
+  const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
+  const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
   // Tick elapsed every second, re-detect process liveness
   useEffect(() => {
@@ -115,16 +115,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   }, [info, handleStart])
 
   // Flag picker handlers
-  const handleFlagToggle = useCallback((flag: string) => {
-    setPickerFlags((prev) => {
-      const next = new Set(prev)
-      if (next.has(flag)) {
-        next.delete(flag)
-      } else {
-        next.add(flag)
-      }
-      return next
-    })
+  const handleFlagToggle = useCallback((flag: Flag) => {
+    setPickerFlags((prev) => toggle(prev, flag))
   }, [])
 
   const handleFlagConfirm = useCallback(() => {
@@ -176,6 +168,10 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       setMode("duration-input")
     }
 
+    if (input === "s") {
+      setSessionFlags((prev) => toggle(prev, "d"))
+    }
+
     if (input === "f") {
       setPickerFlags(new Set(sessionFlags))
       setMode("flag-picker")
@@ -196,6 +192,9 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     setMode("idle")
   }, [])
 
+  const nextStart = describeFlags(flagSetToString(sessionFlags))
+  const nextStartDiffers = info !== null && nextStart !== describeFlags(info.flags)
+
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
@@ -203,6 +202,12 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       </Box>
 
       <StatusDisplay info={info} elapsed={elapsed} />
+
+      {mode === "idle" && nextStartDiffers && (
+        <Box marginTop={1}>
+          <Text color="yellow">Next start: {nextStart}. Press o or t to apply.</Text>
+        </Box>
+      )}
 
       {(mode === "confirm-on" || mode === "confirm-timed") && (
         <ConfirmDialog
@@ -237,7 +242,18 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         </Box>
       )}
 
-      {mode !== "flag-picker" && <ActionBar actions={actions} />}
+      {mode !== "flag-picker" && (
+        <ActionBar
+          actions={[
+            { key: "o", label: "on" },
+            { key: "x", label: "off" },
+            { key: "t", label: "timed" },
+            { key: "s", label: "screen", toggled: sessionFlags.has("d") },
+            { key: "f", label: "advanced" },
+            { key: "q", label: "quit" },
+          ]}
+        />
+      )}
     </Box>
   )
 }

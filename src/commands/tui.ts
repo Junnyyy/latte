@@ -13,7 +13,7 @@ export const tuiHandler = () =>
     )
     const rt = yield* Effect.runtime<CaffeinateService>()
 
-    const onStart = async (duration?: number, flags?: string): Promise<TuiResult> => {
+    const onStart = async (duration: number | undefined, flags: string): Promise<TuiResult> => {
       const program = Effect.gen(function* () {
         const s = yield* CaffeinateService
         yield* s.kill().pipe(Effect.catchAll(() => Effect.void))

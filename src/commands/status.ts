@@ -18,8 +18,7 @@ export const statusHandler = () =>
     const { flags, startTime, duration, remaining } = info.value
     const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000)
 
-    yield* Console.log(`${bold("☕")} ${green("Active")} — preventing sleep`)
-    yield* Console.log(`   Modes: ${describeFlags(flags)}`)
+    yield* Console.log(`${bold("☕")} ${green("Active")} — ${describeFlags(flags)}`)
     yield* Console.log(`   Running for: ${formatDuration(elapsed)}`)
 
     if (duration !== null && remaining !== null) {

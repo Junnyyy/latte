@@ -34,6 +34,27 @@ results are wrong.
 Ink draws its first frame before it reads the keyboard. A key sent before then is
 echoed as text and lost. Wait for a frame, then pause briefly before sending keys.
 
+## caffeinate assertions
+
+Check a claim about a `caffeinate` flag with `pmset -g assertions` while the
+process runs. Read the per-process `pid N(caffeinate)` lines. The global counts
+include assertions from other apps.
+
+Measured on macOS 27 on AC power:
+
+- Without `-t`, `caffeinate -imsu` drops `UserIsActive` and `PreventDiskIdle`
+  within 8 seconds. Only `PreventUserIdleSystemSleep` and `PreventSystemSleep`
+  remain.
+- With `-t 60`, the same flags hold all four assertions for the whole timeout.
+- `caffeinate -d` holds only `PreventUserIdleDisplaySleep`.
+
+The IOKit header `IOKit.framework/Headers/pwr_mgt/IOPMLib.h` in the SDK states
+two more facts. While `PreventUserIdleDisplaySleep` holds, the system cannot
+idle sleep. `PreventUserIdleSystemSleep` still allows sleep on lid close.
+
+The presets in `src/utils/flags.ts` follow from these results. Keep `-u` out of
+the presets, because its effect depends on whether the session has a timeout.
+
 ## Release boundaries
 
 `bun run release patch` bumps the version, builds, commits, tags, pushes, and

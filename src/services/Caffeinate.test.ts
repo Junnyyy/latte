@@ -123,11 +123,11 @@ describe("CaffeinateService.start", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* CaffeinateService
-        return yield* svc.start()
+        return yield* svc.start(undefined, "-is")
       }).pipe(Effect.provide(testLayer)),
     )
 
-    expect(spawnedArgs).toEqual(["caffeinate", "-imsu"])
+    expect(spawnedArgs).toEqual(["caffeinate", "-is"])
     expect(result.pid).toBe(12345)
   })
 
@@ -152,11 +152,11 @@ describe("CaffeinateService.start", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* CaffeinateService
-        return yield* svc.start(1800)
+        return yield* svc.start(1800, "-is")
       }).pipe(Effect.provide(testLayer)),
     )
 
-    expect(spawnedArgs).toEqual(["caffeinate", "-imsu", "-t", "1800"])
+    expect(spawnedArgs).toEqual(["caffeinate", "-is", "-t", "1800"])
     expect(result.duration).toBe(1800)
   })
 

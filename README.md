@@ -2,12 +2,11 @@
 
 Friendly macOS sleep prevention for humans and AI agents.
 
-Keep your machine awake for long builds, agent runs, and lunch breaks without remembering `caffeinate` flags. `latte` wraps it with a clean CLI and a live TUI dashboard.
+Keep your Mac awake while an agent works, without learning `caffeinate` flags. Pick whether the screen stays on and how long, and latte picks the flags.
 
 ```
 $ latte status
-☕ Active — preventing sleep
-   Modes: idle, disk, system (AC), wake display
+☕ Active — Mac stays awake, screen can sleep
    Running for: 1h 23m
    Remaining: 37m
 ```
@@ -61,13 +60,36 @@ Or manually: `rm ~/.local/bin/latte`
 
 ## Usage
 
-### Turn on (indefinite)
+### Pick the command for your situation
+
+| Your situation | Command | What stays awake |
+|----------------|---------|------------------|
+| You hand work to an agent and walk away for lunch, a meeting, or the night | `latte on` | The Mac. The screen sleeps and locks as usual. |
+| You watch the agent's output, or you present from this Mac | `latte on --screen` | The Mac and the screen. |
+| You start a run that should stop keeping the Mac awake by itself | `latte 2h` | The Mac, for 2 hours. Add `--screen` to keep the screen on too. |
+| You are an agent or a script that manages its own session | `latte on`, then `latte off` | Same as `latte on`. Output is plain text and `off` is idempotent. |
+| You need specific `caffeinate` assertions | `latte on --flags dims` | Exactly the flags you pass. See [Advanced: exact flags](#advanced-exact-flags). |
+
+Keep the lid open. macOS can still sleep the Mac when you close the lid, whatever latte holds.
+
+### Turn on
 
 ```sh
-latte on
+latte on            # Mac stays awake, screen can sleep
+latte on --screen   # Mac and screen stay awake
 ```
 
-Spawns `caffeinate -imsu` in the background and returns immediately. Prevents idle sleep, disk sleep, and system sleep while letting the display sleep naturally. Pass [custom flags](#custom-flags) to change which sleep modes are prevented.
+`latte on` starts `caffeinate` in the background and returns immediately. It keeps running after you close the terminal. `-d` is a short form of `--screen`.
+
+### Turn on for a set time
+
+```sh
+latte 30m
+latte 2h --screen
+latte 90s
+```
+
+The duration accepts `s`, `m`, and `h`. When the time runs out, `caffeinate` exits by itself and the Mac can sleep again.
 
 ### Turn off
 
@@ -75,47 +97,7 @@ Spawns `caffeinate -imsu` in the background and returns immediately. Prevents id
 latte off
 ```
 
-Kills any running caffeinate process. Safe to run when nothing is running — exits cleanly.
-
-### Timed session
-
-```sh
-latte 30m     # 30 minutes
-latte 2h      # 2 hours
-latte 90s     # 90 seconds
-```
-
-Caffeinate self-terminates when the timer expires. No cleanup needed.
-
-### Custom flags
-
-By default, latte uses `-imsu`. You can add or remove flags per session:
-
-```sh
-latte on --display          # add display sleep prevention (-d)
-latte on -d                 # same, short form
-latte on --no-system        # remove system sleep prevention
-latte 30m -d --no-system    # combine: add display, drop system
-```
-
-Available flags:
-
-| Short | Long | Removes |
-|-------|------|---------|
-| `-d` | `--display` | `--no-display` |
-| `-i` | `--idle` | `--no-idle` |
-| `-m` | `--disk` | `--no-disk` |
-| `-s` | `--system` | `--no-system` |
-| `-u` | `--wake` | `--no-wake` |
-
-To make flags permanent without a config file, set `LATTE_FLAGS` in your shell profile:
-
-```sh
-# Always keep the display on
-echo 'export LATTE_FLAGS="-d"' >> ~/.zshrc
-```
-
-`LATTE_FLAGS` is additive — it merges with the defaults. CLI flags override everything, with removes applied last.
+`latte off` stops every running `caffeinate`. If nothing is running, it exits with code `0`.
 
 ### Check status
 
@@ -123,7 +105,7 @@ echo 'export LATTE_FLAGS="-d"' >> ~/.zshrc
 latte status
 ```
 
-Shows whether caffeinate is running, which sleep modes are prevented, how long it's been active, and time remaining for timed sessions.
+`latte status` shows what latte keeps awake, how long it has run, and the time left in a timed session.
 
 ### Interactive mode
 
@@ -131,72 +113,90 @@ Shows whether caffeinate is running, which sleep modes are prevented, how long i
 latte
 ```
 
-When run with no arguments in a terminal, launches a live TUI dashboard:
+In a terminal, `latte` with no arguments opens a live dashboard. It updates every second.
 
-- **o** to start indefinite caffeinate
-- **x** to stop caffeinate
-- **t** to start a timed session (prompts for duration)
-- **f** to toggle [custom flags](#custom-flags) (e.g. enable display sleep prevention)
-- **q** to quit (caffeinate keeps running)
+- **o** turns latte on.
+- **x** turns latte off.
+- **t** starts a timed session. The dashboard asks for a duration.
+- **s** toggles whether the screen stays on. The choice applies to the next **o** or **t**. It does not change a running session. Until you restart, the dashboard shows a `Next start:` line.
+- **f** opens the advanced flag picker. See [Advanced: exact flags](#advanced-exact-flags).
+- **q** quits the dashboard. `caffeinate` keeps running.
 
-The dashboard updates every second — you can watch a countdown tick in real time. Press **f** to open the flag picker — toggle flags with their letter keys (`d`, `i`, `m`, `s`, `u`), then **Enter** to confirm or **Esc** to cancel. Your selections persist for the TUI session and apply to every subsequent start. The flag picker also respects `LATTE_FLAGS`.
+When the output is not a terminal, `latte` prints `latte status` instead.
 
-When piped or in a non-TTY context, falls back to `latte status`.
+### Replacing a running session
 
-### Collision handling
-
-If caffeinate is already running, `latte on` and `latte <duration>` will show what's active and ask before replacing it:
+If `caffeinate` is already running, `latte on` and `latte <duration>` show the running session and ask before they replace it:
 
 ```
 ⚠ Caffeinate is already running (1h 23m, indefinite)
 Kill existing and start 30m timer? (y/n)
 ```
 
-In the TUI, this appears as a confirm dialog instead of a y/n prompt.
+The dashboard shows the same question as a dialog.
+
+## Advanced: exact flags
+
+The two presets cover most sessions. Use exact flags only when you need a specific `caffeinate` assertion.
+
+`--flags` replaces the preset with exactly the letters you pass. It also ignores `LATTE_FLAGS`.
+
+```sh
+latte on --flags dims
+latte 2h --flags im
+```
+
+| Letter | `caffeinate` assertion |
+|--------|------------------------|
+| `d` | Prevents the display from sleeping. This also prevents idle system sleep. |
+| `i` | Prevents idle system sleep. The display can still sleep. |
+| `m` | Prevents disk idle sleep. |
+| `s` | Prevents system sleep. It applies only on AC power. |
+| `u` | Declares user activity. Without a timeout, `caffeinate` drops it after 5 seconds. |
+
+You can't combine `--flags` with `--screen`. Add `d` to `--flags` instead.
+
+To add flags to every preset session, set `LATTE_FLAGS` in your shell profile. For example, this line makes every session keep the screen on:
+
+```sh
+echo 'export LATTE_FLAGS="-d"' >> ~/.zshrc
+```
+
+In the dashboard, press **f** to toggle single letters, **r** to reset to the preset, **Enter** to keep the changes, and **Esc** to discard them.
 
 ## How it works
 
-`latte` is a stateless wrapper around macOS `caffeinate`. It has no config files and no PID files — every command inspects running processes directly:
+latte has no config files and no PID files. Every command inspects the running processes:
 
-1. `pgrep -x caffeinate` to detect if caffeinate is running
-2. `ps` to extract flags, start time, and timer duration
-3. `pkill -x caffeinate` to stop it
+1. `pgrep -x caffeinate` finds a running `caffeinate`.
+2. `ps` reads its flags, start time, and timeout.
+3. `pkill -x caffeinate` stops it.
 
-The default flags are `-imsu`:
+The presets map to these flags:
 
-| Flag | Prevents |
-|------|----------|
-| `-i` | Idle sleep |
-| `-m` | Disk sleep |
-| `-s` | System sleep (on AC power) |
-| `-u` | Declares user activity |
+| Preset | Flags | Effect |
+|--------|-------|--------|
+| `latte on` | `-is` | Prevents idle sleep. On AC power, also prevents system sleep. The display sleeps on its normal timer. |
+| `latte on --screen` | `-dis` | Adds `-d`, which keeps the display on. |
 
-By default, no `-d` (display) — the display is free to sleep. To change which flags are used, see [Custom flags](#custom-flags).
+Earlier versions used `-imsu`. Without a timeout, `caffeinate` drops the `-u` and `-m` assertions after about 5 seconds. With a timeout, it holds them for the whole session. So `latte on` and `latte 30m` behaved differently. The presets leave out both flags.
 
 ## For AI agents
 
-Every command is non-interactive when piped:
+Every command is non-interactive when its output is not a terminal:
 
 ```sh
-# Start before a long task
-latte on
-
-# Start with a timeout
-latte 2h
-
-# Keep the display on (e.g. for visual monitoring)
-latte on -d
-
-# Check if running
-latte status
-
-# Clean up
-latte off
+latte on            # before a long task
+latte 2h            # or with a time limit
+latte on --screen   # keep the screen on, for example to watch progress
+latte status        # check what is running
+latte off           # clean up
 ```
 
-- Non-TTY mode uses plain text output (no TUI)
-- `latte off` is idempotent — safe to run unconditionally in scripts
-- Exit codes: `0` success, `1` error
+- When the output is not a terminal, latte prints plain text and opens no dashboard.
+- `latte off` is idempotent. Run it unconditionally in scripts.
+- An unknown option fails with exit code `1`. latte does not ignore it.
+- Exit codes: `0` for success, `1` for an error.
 
 ## Architecture
 
