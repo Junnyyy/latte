@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Box, Text, useInput, useApp } from "ink"
-import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
+import type { CaffeinateInfo, TuiResult, WatchResult } from "../types/index.ts"
 import type { StartSpec } from "../services/Caffeinate.ts"
 import { StatusDisplay } from "./components/StatusDisplay.tsx"
 import { ActionBar } from "./components/ActionBar.tsx"
@@ -12,7 +12,7 @@ import { describeFlags, flagSetToString, type Flag } from "../utils/flags.ts"
 import { initialFlagSet } from "../utils/resolveFlags.ts"
 import { Effect } from "effect"
 
-type Mode = "idle" | "confirm" | "duration-input" | "flag-picker" | "error"
+type Mode = "idle" | "confirm" | "duration-input" | "watch-input" | "flag-picker" | "error"
 
 /** A start waiting on the replace confirmation. The flags come from the session at confirm time. */
 type PendingStart = Omit<StartSpec, "flags">
@@ -22,6 +22,8 @@ export interface Props {
   onStart: (spec: StartSpec) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
   onDetect: () => Promise<CaffeinateInfo | null>
+  /** Resolve an app name or PID to the one process a session waits for, as --while does. */
+  onResolveWatch: (query: string) => Promise<WatchResult>
 }
 
 const toggle = (flags: ReadonlySet<Flag>, flag: Flag): Set<Flag> => {
@@ -31,14 +33,15 @@ const toggle = (flags: ReadonlySet<Flag>, flag: Flag): Set<Flag> => {
   return next
 }
 
-export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect }) => {
+export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, onResolveWatch }) => {
   const { exit } = useApp()
   const [info, setInfo] = useState<CaffeinateInfo | null>(initialInfo)
   const [mode, setMode] = useState<Mode>("idle")
   const [elapsed, setElapsed] = useState(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingStart, setPendingStart] = useState<PendingStart>({})
-  const [durationError, setDurationError] = useState<string | null>(null)
+  const [promptError, setPromptError] = useState<string | null>(null)
+  const resolvingWatch = useRef(false)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
@@ -102,12 +105,12 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   const handleDurationSubmit = useCallback((value: string) => {
     const result = Effect.runSyncExit(parseDuration(value))
     if (result._tag === "Failure") {
-      setDurationError(`"${value}" is not a valid duration (use e.g. 30m, 2h, 90s)`)
+      setPromptError(`"${value}" is not a valid duration (use e.g. 30m, 2h, 90s)`)
       return
     }
 
     const seconds = result.value
-    setDurationError(null)
+    setPromptError(null)
 
     if (info) {
       setPendingStart({ duration: seconds })
@@ -116,6 +119,26 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       handleStart({ duration: seconds })
     }
   }, [info, handleStart])
+
+  const handleWatchSubmit = useCallback(async (query: string) => {
+    if (resolvingWatch.current) return
+    resolvingWatch.current = true
+    const result = await onResolveWatch(query)
+    resolvingWatch.current = false
+
+    if (!result.ok) {
+      setPromptError(result.error)
+      return
+    }
+    setPromptError(null)
+
+    if (info) {
+      setPendingStart({ watch: result.target })
+      setMode("confirm")
+    } else {
+      handleStart({ watch: result.target })
+    }
+  }, [info, onResolveWatch, handleStart])
 
   // Flag picker handlers
   const handleFlagToggle = useCallback((flag: Flag) => {
@@ -167,8 +190,13 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     }
 
     if (input === "t") {
-      setDurationError(null)
+      setPromptError(null)
       setMode("duration-input")
+    }
+
+    if (input === "w") {
+      setPromptError(null)
+      setMode("watch-input")
     }
 
     if (input === "s") {
@@ -190,8 +218,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     setMode("idle")
   }, [])
 
-  const handleDurationCancel = useCallback(() => {
-    setDurationError(null)
+  const handlePromptCancel = useCallback(() => {
+    setPromptError(null)
     setMode("idle")
   }, [])
 
@@ -208,7 +236,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
 
       {mode === "idle" && nextStartDiffers && (
         <Box marginTop={1}>
-          <Text color="yellow">Next start: {nextStart}. Press o or t to apply.</Text>
+          <Text color="yellow">Next start: {nextStart}. Press o, t, or w to apply.</Text>
         </Box>
       )}
 
@@ -225,8 +253,19 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
           label="Duration:"
           accepts={/^[a-zA-Z0-9]$/}
           onSubmit={handleDurationSubmit}
-          onCancel={handleDurationCancel}
-          error={durationError}
+          onCancel={handlePromptCancel}
+          error={promptError}
+        />
+      )}
+
+      {mode === "watch-input" && (
+        <TextPrompt
+          label="Stay awake while:"
+          accepts={/^[\w .-]$/}
+          hint="An app name or PID, e.g. claude, cursor, 4242"
+          onSubmit={handleWatchSubmit}
+          onCancel={handlePromptCancel}
+          error={promptError}
         />
       )}
 
@@ -253,6 +292,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
             { key: "o", label: "on" },
             { key: "x", label: "off" },
             { key: "t", label: "timed" },
+            { key: "w", label: "while" },
             { key: "s", label: "screen", toggled: sessionFlags.has("d") },
             { key: "f", label: "advanced" },
             { key: "q", label: "quit" },
