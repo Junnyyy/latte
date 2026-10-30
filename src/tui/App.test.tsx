@@ -193,6 +193,31 @@ describe("App", () => {
     expect(lastFrame()).toContain("Mac and screen stay awake")
   })
 
+  test("pressing s during a session says the change applies to the next start", async () => {
+    const { lastFrame, stdin } = render(
+      <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+    expect(lastFrame()).not.toContain("Next start")
+
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).toContain("Next start: Mac and screen stay awake. Press o or t to apply.")
+
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).not.toContain("Next start")
+  })
+
+  test("pressing s with no session shows no next-start line", async () => {
+    const { lastFrame, stdin } = render(
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
+    )
+    stdin.write("s")
+    await wait()
+    expect(lastFrame()).toContain("[s] screen ●")
+    expect(lastFrame()).not.toContain("Next start")
+  })
+
   test("pressing s twice turns the screen back off", async () => {
     let startFlags: string | undefined
     const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {

@@ -7,7 +7,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog.tsx"
 import { DurationInput } from "./components/DurationInput.tsx"
 import { FlagPicker } from "./components/FlagPicker.tsx"
 import { parseDuration } from "../utils/duration.ts"
-import { flagSetToString, type Flag } from "../utils/flags.ts"
+import { describeFlags, flagSetToString, type Flag } from "../utils/flags.ts"
 import { initialFlagSet } from "../utils/resolveFlags.ts"
 import { Effect } from "effect"
 
@@ -192,6 +192,9 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     setMode("idle")
   }, [])
 
+  const nextStart = describeFlags(flagSetToString(sessionFlags))
+  const nextStartDiffers = info !== null && nextStart !== describeFlags(info.flags)
+
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
@@ -199,6 +202,12 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       </Box>
 
       <StatusDisplay info={info} elapsed={elapsed} />
+
+      {mode === "idle" && nextStartDiffers && (
+        <Box marginTop={1}>
+          <Text color="yellow">Next start: {nextStart}. Press o or t to apply.</Text>
+        </Box>
+      )}
 
       {(mode === "confirm-on" || mode === "confirm-timed") && (
         <ConfirmDialog
