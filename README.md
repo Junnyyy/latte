@@ -118,7 +118,7 @@ In a terminal, `latte` with no arguments opens a live dashboard. It updates ever
 - **o** turns latte on.
 - **x** turns latte off.
 - **t** starts a timed session. The dashboard asks for a duration.
-- **s** toggles whether the screen stays on. The choice applies to the next **o** or **t**.
+- **s** toggles whether the screen stays on. The choice applies to the next **o** or **t**. It does not change a running session. Until you restart, the dashboard shows a `Next start:` line.
 - **f** opens the advanced flag picker. See [Advanced: exact flags](#advanced-exact-flags).
 - **q** quits the dashboard. `caffeinate` keeps running.
 
