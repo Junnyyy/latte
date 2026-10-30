@@ -1,7 +1,7 @@
 import React from "react"
 import { render } from "ink"
 import { Effect, Runtime, Option } from "effect"
-import { CaffeinateService } from "../services/Caffeinate.ts"
+import { CaffeinateService, type StartSpec } from "../services/Caffeinate.ts"
 import { App } from "../tui/App.tsx"
 import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
 
@@ -13,11 +13,11 @@ export const tuiHandler = () =>
     )
     const rt = yield* Effect.runtime<CaffeinateService>()
 
-    const onStart = async (duration: number | undefined, flags: string): Promise<TuiResult> => {
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
       const program = Effect.gen(function* () {
         const s = yield* CaffeinateService
         yield* s.kill().pipe(Effect.catchAll(() => Effect.void))
-        const info = yield* s.start({ flags, duration })
+        const info = yield* s.start(spec)
         return { ok: true as const, info }
       }).pipe(
         Effect.catchAll((e): Effect.Effect<TuiResult> =>

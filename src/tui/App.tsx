@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { Box, Text, useInput, useApp } from "ink"
 import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
+import type { StartSpec } from "../services/Caffeinate.ts"
 import { StatusDisplay } from "./components/StatusDisplay.tsx"
 import { ActionBar } from "./components/ActionBar.tsx"
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx"
@@ -11,11 +12,14 @@ import { describeFlags, flagSetToString, type Flag } from "../utils/flags.ts"
 import { initialFlagSet } from "../utils/resolveFlags.ts"
 import { Effect } from "effect"
 
-type Mode = "idle" | "confirm-on" | "confirm-timed" | "duration-input" | "flag-picker" | "error"
+type Mode = "idle" | "confirm" | "duration-input" | "flag-picker" | "error"
+
+/** A start waiting on the replace confirmation. The flags come from the session at confirm time. */
+type PendingStart = Omit<StartSpec, "flags">
 
 export interface Props {
   initialInfo: CaffeinateInfo | null
-  onStart: (duration: number | undefined, flags: string) => Promise<TuiResult>
+  onStart: (spec: StartSpec) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
   onDetect: () => Promise<CaffeinateInfo | null>
 }
@@ -33,7 +37,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   const [mode, setMode] = useState<Mode>("idle")
   const [elapsed, setElapsed] = useState(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [pendingDuration, setPendingDuration] = useState<number | undefined>(undefined)
+  const [pendingStart, setPendingStart] = useState<PendingStart>({})
   const [durationError, setDurationError] = useState<string | null>(null)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
@@ -65,10 +69,9 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     }
   }, [info])
 
-  const handleStart = useCallback(async (duration?: number) => {
+  const handleStart = useCallback(async (start: PendingStart = {}) => {
     try {
-      const flagStr = flagSetToString(sessionFlags)
-      const result = await onStart(duration, flagStr)
+      const result = await onStart({ ...start, flags: flagSetToString(sessionFlags) })
       if (result.ok) {
         setInfo(result.info)
         setMode("idle")
@@ -107,10 +110,10 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     setDurationError(null)
 
     if (info) {
-      setPendingDuration(seconds)
-      setMode("confirm-timed")
+      setPendingStart({ duration: seconds })
+      setMode("confirm")
     } else {
-      handleStart(seconds)
+      handleStart({ duration: seconds })
     }
   }, [info, handleStart])
 
@@ -150,8 +153,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
 
     if (input === "o") {
       if (info) {
-        setPendingDuration(undefined)
-        setMode("confirm-on")
+        setPendingStart({})
+        setMode("confirm")
       } else {
         handleStart()
       }
@@ -179,11 +182,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
   })
 
   const handleConfirm = useCallback(() => {
-    handleStart(pendingDuration)
-  }, [handleStart, pendingDuration])
+    handleStart(pendingStart)
+  }, [handleStart, pendingStart])
 
   const handleCancel = useCallback(() => {
-    setPendingDuration(undefined)
+    setPendingStart({})
     setMode("idle")
   }, [])
 
@@ -209,7 +212,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         </Box>
       )}
 
-      {(mode === "confirm-on" || mode === "confirm-timed") && (
+      {mode === "confirm" && (
         <ConfirmDialog
           message="Caffeinate is already running. Replace?"
           onConfirm={handleConfirm}

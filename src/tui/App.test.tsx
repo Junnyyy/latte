@@ -3,6 +3,7 @@ import React from "react"
 import { render } from "ink-testing-library"
 import { App } from "./App.tsx"
 import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
+import type { StartSpec } from "../services/Caffeinate.ts"
 
 const activeInfo: CaffeinateInfo = {
   pid: 42,
@@ -22,7 +23,7 @@ const timedInfo: CaffeinateInfo = {
   watching: null,
 }
 
-const noop = async (_duration?: number, _flags?: string): Promise<TuiResult> => ({ ok: true, info: null })
+const noop = async (_spec?: StartSpec): Promise<TuiResult> => ({ ok: true, info: null })
 const noopDetect = async () => null
 
 const originalEnv = process.env.LATTE_FLAGS
@@ -88,7 +89,7 @@ describe("App", () => {
 
   test("pressing o on inactive state starts caffeinate", async () => {
     let startCalled = false
-    const onStart = async (duration?: number, _flags?: string): Promise<TuiResult> => {
+    const onStart = async ({ duration }: StartSpec): Promise<TuiResult> => {
       startCalled = true
       expect(duration).toBeUndefined()
       return { ok: true, info: activeInfo }
@@ -149,6 +150,33 @@ describe("App", () => {
     expect(frame).toContain("[esc]")
   })
 
+  test("a duration entered during a session starts after the replace confirm", async () => {
+    const starts: StartSpec[] = []
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
+      starts.push(spec)
+      return { ok: true, info: timedInfo }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+
+    stdin.write("t")
+    await wait()
+    for (const c of "90s") {
+      stdin.write(c)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+    expect(lastFrame()).toContain("Replace?")
+    expect(starts).toEqual([])
+
+    stdin.write("y")
+    await wait()
+    expect(starts).toEqual([{ duration: 90, flags: "-is" }])
+  })
+
   test("cancelling confirm dialog returns to list", async () => {
     const { lastFrame, stdin } = render(
       <App initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
@@ -184,7 +212,7 @@ describe("App", () => {
 
   test("pressing s turns the screen on for the next start", async () => {
     let startFlags: string | undefined
-    const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {
+    const onStart = async ({ flags }: StartSpec): Promise<TuiResult> => {
       startFlags = flags
       return { ok: true, info: { ...activeInfo, flags } }
     }
@@ -231,7 +259,7 @@ describe("App", () => {
 
   test("pressing s twice turns the screen back off", async () => {
     let startFlags: string | undefined
-    const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {
+    const onStart = async ({ flags }: StartSpec): Promise<TuiResult> => {
       startFlags = flags
       return { ok: true, info: activeInfo }
     }
@@ -269,7 +297,7 @@ describe("App", () => {
 
   test("picker reset returns to the awake preset", async () => {
     let startFlags: string | undefined
-    const onStart = async (_duration: number | undefined, flags: string): Promise<TuiResult> => {
+    const onStart = async ({ flags }: StartSpec): Promise<TuiResult> => {
       startFlags = flags
       return { ok: true, info: activeInfo }
     }
@@ -349,7 +377,7 @@ describe("App", () => {
 
   test("cancelling flag picker discards changes", async () => {
     let startFlags: string | undefined
-    const onStart = async (duration?: number, flags?: string): Promise<TuiResult> => {
+    const onStart = async ({ flags }: StartSpec): Promise<TuiResult> => {
       startFlags = flags
       return { ok: true, info: activeInfo }
     }
@@ -377,7 +405,7 @@ describe("App", () => {
 
   test("onStart receives session flags after picker confirm", async () => {
     let startFlags: string | undefined
-    const onStart = async (duration?: number, flags?: string): Promise<TuiResult> => {
+    const onStart = async ({ flags }: StartSpec): Promise<TuiResult> => {
       startFlags = flags
       return { ok: true, info: { ...activeInfo, flags: "-dimsu" } }
     }
