@@ -1,10 +1,10 @@
 import { Console, Effect, Option } from "effect"
 import { CaffeinateService } from "../services/Caffeinate.ts"
 import { fail } from "../utils/exit.ts"
-import { bold, green, yellow } from "../utils/format.ts"
+import { bold, dim, green, yellow } from "../utils/format.ts"
 import { formatDuration } from "../utils/duration.ts"
 import { promptYesNo } from "../utils/prompt.ts"
-import type { Selection } from "../utils/flags.ts"
+import { describeFlags, PRESET_LID_NOTE, type Selection } from "../utils/flags.ts"
 import { resolveFlags } from "../utils/resolveFlags.ts"
 
 export const onHandler = (selection: Selection) =>
@@ -32,7 +32,8 @@ export const onHandler = (selection: Selection) =>
 
     const flags = resolveFlags(selection)
     yield* svc.start(undefined, flags)
-    yield* Console.log(`${bold("☕")} ${green("Caffeinate started")} — preventing sleep`)
+    yield* Console.log(`${bold("☕")} ${green("On")} — ${describeFlags(flags)}`)
+    if (selection.kind === "preset") yield* Console.log(dim(PRESET_LID_NOTE))
   }).pipe(
     Effect.catchAll((e) => fail(`Error: ${"message" in e ? e.message : String(e)}`)),
   )

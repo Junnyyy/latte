@@ -19,6 +19,9 @@ export const PRESETS = {
 
 export type Preset = keyof typeof PRESETS
 
+/** No preset holds a lid-close assertion, and caffeinate has none to offer. */
+export const PRESET_LID_NOTE = "Closing the lid can still sleep your Mac."
+
 export type Selection =
   | { kind: "preset"; preset: Preset }
   | { kind: "custom"; flags: ReadonlySet<Flag> }
