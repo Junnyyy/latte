@@ -324,6 +324,74 @@ describe("App", () => {
     expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
   })
 
+  test("an enter whose resolve lands after the first start finishes starts nothing", async () => {
+    const resolves: ((result: WatchResult) => void)[] = []
+    const onResolveWatch = (_query: string) => new Promise<WatchResult>((resolve) => { resolves.push(resolve) })
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { stdin } = render(
+      <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    resolves[0]!({ ok: true, target: cursor })
+    await wait()
+    stdin.write("\r")
+    await wait()
+    finishStart({ ok: true, info: { ...activeInfo, watching: cursor } })
+    await wait()
+    resolves[1]?.({ ok: true, target: cursor })
+    await wait()
+
+    expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
+  })
+
+  test("a resolve from a cancelled submit is ignored after the same query is resubmitted", async () => {
+    const resolves: ((result: WatchResult) => void)[] = []
+    const onResolveWatch = (_query: string) => new Promise<WatchResult>((resolve) => { resolves.push(resolve) })
+    const starts: StartSpec[] = []
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
+      starts.push(spec)
+      return { ok: true, info: activeInfo }
+    }
+
+    const { stdin } = render(
+      <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    resolves[0]!({ ok: true, target: { pid: 1, name: "stale" } })
+    await wait()
+    expect(starts).toEqual([])
+
+    resolves[1]!({ ok: true, target: cursor })
+    await wait()
+    expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
+  })
+
   test("pressing o twice while a session starts starts it once", async () => {
     let finish: (result: TuiResult) => void = () => {}
     let starts = 0

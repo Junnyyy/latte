@@ -39,7 +39,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingStart, setPendingStart] = useState<PendingStart>({})
   const [promptError, setPromptError] = useState<string | null>(null)
-  const activeWatchQuery = useRef<string | null>(null)
+  const activeWatchSubmit = useRef<symbol | null>(null)
   const startInFlight = useRef(false)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
@@ -124,23 +124,27 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   }, [info, handleStart])
 
   const handleWatchSubmit = useCallback(async (query: string) => {
-    if (activeWatchQuery.current !== null) return
-    activeWatchQuery.current = query
-    const result = await onResolveWatch(query)
-    if (activeWatchQuery.current !== query) return
-    activeWatchQuery.current = null
+    if (activeWatchSubmit.current !== null) return
+    const submit = Symbol(query)
+    activeWatchSubmit.current = submit
+    try {
+      const result = await onResolveWatch(query)
+      if (activeWatchSubmit.current !== submit) return
 
-    if (!result.ok) {
-      setPromptError(result.error)
-      return
-    }
-    setPromptError(null)
+      if (!result.ok) {
+        setPromptError(result.error)
+        return
+      }
+      setPromptError(null)
 
-    if (info) {
-      setPendingStart({ watch: result.target })
-      setMode("confirm")
-    } else {
-      handleStart({ watch: result.target })
+      if (info) {
+        setPendingStart({ watch: result.target })
+        setMode("confirm")
+      } else {
+        await handleStart({ watch: result.target })
+      }
+    } finally {
+      if (activeWatchSubmit.current === submit) activeWatchSubmit.current = null
     }
   }, [info, onResolveWatch, handleStart])
 
@@ -223,7 +227,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   }, [])
 
   const handlePromptCancel = useCallback(() => {
-    activeWatchQuery.current = null
+    activeWatchSubmit.current = null
     setPromptError(null)
     setMode("idle")
   }, [])
