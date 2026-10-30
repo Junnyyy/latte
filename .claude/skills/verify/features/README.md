@@ -35,4 +35,5 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [On and off](./on-off.md) covers indefinite sessions, stopping, and replacing a running session.
 - [Timed sessions](./timed.md) covers `latte <duration>`, invalid durations, and the replace prompt.
 - [Presets and flags](./flags.md) covers the `awake` and `screen` presets, `--screen`, `--flags`, `LATTE_FLAGS`, and the option errors.
+- [Watch an app or process](./while.md) covers `--while` with names, PIDs, durations, and missing targets.
 - [Interactive TUI](./tui.md) covers the Ink dashboard and its `o`, `x`, `t`, `s`, `f`, and `q` keys.
