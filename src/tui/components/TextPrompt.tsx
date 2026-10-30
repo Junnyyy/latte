@@ -3,18 +3,16 @@ import { Box, Text, useInput } from "ink"
 
 interface Props {
   label: string
-  /** Matches one typed character the prompt keeps. */
-  accepts: RegExp
+  acceptsChar: RegExp
   hint?: string
   onSubmit: (value: string) => void
   onCancel: () => void
   error?: string | null
 }
 
-export const TextPrompt: React.FC<Props> = ({ label, accepts, hint, onSubmit, onCancel, error }) => {
+export const TextPrompt: React.FC<Props> = ({ label, acceptsChar, hint, onSubmit, onCancel, error }) => {
   const [value, setValue] = useState("")
-  // The error describes this value, so editing the input hides it.
-  const [submitted, setSubmitted] = useState<string | null>(null)
+  const [editedSinceSubmit, setEditedSinceSubmit] = useState(false)
 
   useInput((input, key) => {
     if (key.escape) {
@@ -25,7 +23,7 @@ export const TextPrompt: React.FC<Props> = ({ label, accepts, hint, onSubmit, on
     if (key.return) {
       const trimmed = value.trim()
       if (trimmed.length > 0) {
-        setSubmitted(trimmed)
+        setEditedSinceSubmit(false)
         onSubmit(trimmed)
       }
       return
@@ -33,11 +31,13 @@ export const TextPrompt: React.FC<Props> = ({ label, accepts, hint, onSubmit, on
 
     if (key.backspace || key.delete) {
       setValue((v) => v.slice(0, -1))
+      setEditedSinceSubmit(true)
       return
     }
 
-    if (input && accepts.test(input)) {
+    if (input && acceptsChar.test(input)) {
       setValue((v) => v + input)
+      setEditedSinceSubmit(true)
     }
   })
 
@@ -49,7 +49,7 @@ export const TextPrompt: React.FC<Props> = ({ label, accepts, hint, onSubmit, on
         <Text dimColor>█</Text>
       </Box>
       {hint && <Text dimColor>{hint}</Text>}
-      {error && value.trim() === submitted && (
+      {error && !editedSinceSubmit && (
         <Text color="red">{error}</Text>
       )}
       <Box gap={2} marginTop={0}>

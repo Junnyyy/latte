@@ -14,7 +14,6 @@ import { Effect } from "effect"
 
 type Mode = "idle" | "confirm" | "duration-input" | "watch-input" | "flag-picker" | "error"
 
-/** A start waiting on the replace confirmation. The flags come from the session at confirm time. */
 type PendingStart = Omit<StartSpec, "flags">
 
 export interface Props {
@@ -22,7 +21,6 @@ export interface Props {
   onStart: (spec: StartSpec) => Promise<TuiResult>
   onStop: () => Promise<TuiResult>
   onDetect: () => Promise<CaffeinateInfo | null>
-  /** Resolve an app name or PID to the one process a session waits for, as --while does. */
   onResolveWatch: (query: string) => Promise<WatchResult>
 }
 
@@ -41,8 +39,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingStart, setPendingStart] = useState<PendingStart>({})
   const [promptError, setPromptError] = useState<string | null>(null)
-  // The query being resolved. Cancelling clears it, so a late result starts nothing.
-  const pendingWatch = useRef<string | null>(null)
+  const activeWatchQuery = useRef<string | null>(null)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
@@ -122,11 +119,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   }, [info, handleStart])
 
   const handleWatchSubmit = useCallback(async (query: string) => {
-    if (pendingWatch.current !== null) return
-    pendingWatch.current = query
+    if (activeWatchQuery.current !== null) return
+    activeWatchQuery.current = query
     const result = await onResolveWatch(query)
-    if (pendingWatch.current !== query) return
-    pendingWatch.current = null
+    if (activeWatchQuery.current !== query) return
+    activeWatchQuery.current = null
 
     if (!result.ok) {
       setPromptError(result.error)
@@ -221,7 +218,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   }, [])
 
   const handlePromptCancel = useCallback(() => {
-    pendingWatch.current = null
+    activeWatchQuery.current = null
     setPromptError(null)
     setMode("idle")
   }, [])
@@ -254,7 +251,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
       {mode === "duration-input" && (
         <TextPrompt
           label="Duration:"
-          accepts={/^[a-zA-Z0-9]$/}
+          acceptsChar={/^[a-zA-Z0-9]$/}
           onSubmit={handleDurationSubmit}
           onCancel={handlePromptCancel}
           error={promptError}
@@ -264,7 +261,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
       {mode === "watch-input" && (
         <TextPrompt
           label="Stay awake while:"
-          accepts={/^[\w .-]$/}
+          acceptsChar={/^[\w .-]$/}
           hint="An app name or PID, e.g. claude, cursor, 4242"
           onSubmit={handleWatchSubmit}
           onCancel={handlePromptCancel}
