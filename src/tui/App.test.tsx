@@ -66,6 +66,15 @@ describe("App", () => {
     expect(frame).toContain("Remaining")
   })
 
+  test("renders what a watched session waits for instead of indefinite", () => {
+    const watchedInfo: CaffeinateInfo = { ...activeInfo, watching: { pid: 123, name: "Cursor" } }
+    const { lastFrame } = render(
+      <App initialInfo={watchedInfo} onStart={noop} onStop={noop} onDetect={async () => watchedInfo} />,
+    )
+    expect(lastFrame()).toContain("Until Cursor exits (PID 123)")
+    expect(lastFrame()).not.toContain("indefinite")
+  })
+
   test("shows action bar with keybinds", () => {
     const { lastFrame } = render(
       <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,

@@ -15,15 +15,18 @@ export const statusHandler = () =>
       return
     }
 
-    const { flags, startTime, duration, remaining } = info.value
+    const { flags, startTime, duration, remaining, watching } = info.value
     const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000)
 
     yield* Console.log(`${bold("☕")} ${green("Active")} — ${describeFlags(flags)}`)
     yield* Console.log(`   Running for: ${formatDuration(elapsed)}`)
 
+    if (watching !== null) {
+      yield* Console.log(`   Until: ${watching.name} exits ${dim(`(PID ${watching.pid})`)}`)
+    }
     if (duration !== null && remaining !== null) {
       yield* Console.log(`   Remaining: ${formatDuration(remaining)}`)
-    } else {
+    } else if (watching === null) {
       yield* Console.log(`   Duration: ${dim("indefinite")}`)
     }
   }).pipe(
