@@ -5,7 +5,7 @@ import type { StartSpec } from "../services/Caffeinate.ts"
 import { StatusDisplay } from "./components/StatusDisplay.tsx"
 import { ActionBar } from "./components/ActionBar.tsx"
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx"
-import { DurationInput } from "./components/DurationInput.tsx"
+import { TextPrompt } from "./components/TextPrompt.tsx"
 import { FlagPicker } from "./components/FlagPicker.tsx"
 import { parseDuration } from "../utils/duration.ts"
 import { describeFlags, flagSetToString, type Flag } from "../utils/flags.ts"
@@ -221,7 +221,9 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
       )}
 
       {mode === "duration-input" && (
-        <DurationInput
+        <TextPrompt
+          label="Duration:"
+          accepts={/^[a-zA-Z0-9]$/}
           onSubmit={handleDurationSubmit}
           onCancel={handleDurationCancel}
           error={durationError}

@@ -150,6 +150,27 @@ describe("App", () => {
     expect(frame).toContain("[esc]")
   })
 
+  test("an invalid duration shows its error until the value changes", async () => {
+    const { lastFrame, stdin } = render(
+      <App initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("t")
+    await wait()
+    for (const c of "abc") {
+      stdin.write(c)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+    expect(lastFrame()).toContain('"abc" is not a valid duration')
+
+    stdin.write("\u007F")
+    await wait()
+    expect(lastFrame()).toContain("Duration: ab")
+    expect(lastFrame()).not.toContain("not a valid duration")
+  })
+
   test("a duration entered during a session starts after the replace confirm", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {

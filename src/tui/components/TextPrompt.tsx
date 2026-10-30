@@ -2,13 +2,19 @@ import React, { useState } from "react"
 import { Box, Text, useInput } from "ink"
 
 interface Props {
+  label: string
+  /** Matches one typed character the prompt keeps. */
+  accepts: RegExp
+  hint?: string
   onSubmit: (value: string) => void
   onCancel: () => void
   error?: string | null
 }
 
-export const DurationInput: React.FC<Props> = ({ onSubmit, onCancel, error }) => {
+export const TextPrompt: React.FC<Props> = ({ label, accepts, hint, onSubmit, onCancel, error }) => {
   const [value, setValue] = useState("")
+  // The error describes this value, so editing the input hides it.
+  const [submitted, setSubmitted] = useState<string | null>(null)
 
   useInput((input, key) => {
     if (key.escape) {
@@ -17,8 +23,10 @@ export const DurationInput: React.FC<Props> = ({ onSubmit, onCancel, error }) =>
     }
 
     if (key.return) {
-      if (value.trim().length > 0) {
-        onSubmit(value.trim())
+      const trimmed = value.trim()
+      if (trimmed.length > 0) {
+        setSubmitted(trimmed)
+        onSubmit(trimmed)
       }
       return
     }
@@ -28,8 +36,7 @@ export const DurationInput: React.FC<Props> = ({ onSubmit, onCancel, error }) =>
       return
     }
 
-    // Only allow alphanumeric input
-    if (input && /^[a-zA-Z0-9]$/.test(input)) {
+    if (input && accepts.test(input)) {
       setValue((v) => v + input)
     }
   })
@@ -37,11 +44,12 @@ export const DurationInput: React.FC<Props> = ({ onSubmit, onCancel, error }) =>
   return (
     <Box marginTop={1} flexDirection="column">
       <Box gap={1}>
-        <Text>Duration:</Text>
+        <Text>{label}</Text>
         <Text bold>{value}</Text>
         <Text dimColor>█</Text>
       </Box>
-      {error && (
+      {hint && <Text dimColor>{hint}</Text>}
+      {error && value.trim() === submitted && (
         <Text color="red">{error}</Text>
       )}
       <Box gap={2} marginTop={0}>
