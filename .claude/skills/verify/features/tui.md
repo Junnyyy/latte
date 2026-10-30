@@ -1,14 +1,15 @@
 # Interactive TUI
 
-Running `latte` in a terminal opens an Ink dashboard. It shows live status, refreshes every second, and takes single-key commands to start, stop, time, keep the screen on, and pick exact flags.
+Running `latte` in a terminal opens an Ink dashboard. It shows live status, refreshes every second, and takes single-key commands to start, stop, time, wait for an app, keep the screen on, and pick exact flags.
 
 ## Sub-features
 
-- `tui-open` draws `☕ latte`, the status block, and the action bar `[o] on  [x] off  [t] timed  [s] screen ○  [f] advanced  [q] quit`.
+- `tui-open` draws `☕ latte`, the status block, and the action bar `[o] on  [x] off  [t] timed  [w] while  [s] screen ○  [f] advanced  [q] quit`.
 - `tui-on` starts an indefinite session with `o`. With a session running, `o` asks `Caffeinate is already running. Replace?` and `y` or `n` answers.
 - `tui-off` stops the session with `x`.
 - `tui-timed` opens a `Duration:` input with `t`. `enter` starts the timer, `esc` cancels, and invalid input shows `is not a valid duration`.
 - `tui-timed-replace` asks `Caffeinate is already running. Replace?` when a duration is entered while a session runs, and `y` starts the timer.
+- `tui-while` opens a `Stay awake while:` input with `w`. `enter` resolves the app name or PID the same way `--while` does and starts `caffeinate -w <pid>`. With a session running, it asks `Caffeinate is already running. Replace?` first. A name that is not running or a dead PID shows the error under the input and starts nothing.
 - `tui-screen` toggles the display flag with `s`. The action bar shows `[s] screen ●` when it is on and `[s] screen ○` when it is off. The next start uses it.
 - `tui-flags` opens the advanced picker with `f`. Letter keys toggle modes, `r` resets to the `awake` preset plus `LATTE_FLAGS`, `enter` keeps the choice for this TUI session, and `esc` discards it.
 - `tui-quit` exits with `q` or `ctrl-c` and leaves the session running.
@@ -28,8 +29,11 @@ Preconditions:
 - **Timed.** Run `V pty timed wait:Inactive send:t wait:Duration: send:90s key:enter 'wait:● Active' 'wait:Remaining: 1m 2' send:q`. The transcript shows `Duration: 90s` and then a `Remaining:` countdown. `caffeinate-after.txt` shows `caffeinate -is -t 90`.
 - **Replace with a timer.** With a session running, run `V pty timed-replace 'wait:● Active' send:t wait:Duration: send:90s key:enter 'wait:Replace?' send:y 'wait:Remaining: 1m 2' send:q`. `caffeinate-after.txt` shows `caffeinate -is -t 90` with a new PID.
 - **Invalid duration.** Run `V pty bad-duration wait:Inactive send:t wait:Duration: send:abc key:enter 'wait:is not a valid duration' key:esc 'wait:[q] quit' send:q`. The transcript shows `"abc" is not a valid duration (use e.g. 30m, 2h, 90s)`, and `caffeinate-after.txt` reads `(none)`.
-- **Screen then replace.** With a session running, run `V pty screen 'wait:● Active' 'wait:[s] screen ○' send:s 'wait:[s] screen ●' 'wait:Next start: Mac and screen stay awake. Press o or t to apply.' send:o 'wait:Replace?' send:y 'wait:Mac and screen stay awake' send:q`. After `s`, a frame shows `Next start: Mac and screen stay awake. Press o or t to apply.` The last frame shows `Mac and screen stay awake` and no `Next start` line. `caffeinate-after.txt` shows `caffeinate -dis` with a new PID.
+- **Screen then replace.** With a session running, run `V pty screen 'wait:● Active' 'wait:[s] screen ○' send:s 'wait:[s] screen ●' 'wait:Next start: Mac and screen stay awake. Press o, t, or w to apply.' send:o 'wait:Replace?' send:y 'wait:Mac and screen stay awake' send:q`. After `s`, a frame shows `Next start: Mac and screen stay awake. Press o, t, or w to apply.` The last frame shows `Mac and screen stay awake` and no `Next start` line. `caffeinate-after.txt` shows `caffeinate -dis` with a new PID.
 - **Advanced flags then replace.** With a session running, run `V pty flags 'wait:● Active' send:f 'wait:[r] reset' send:m 'wait:[m] disk ●' key:enter 'wait:[q] quit' send:o 'wait:Replace?' send:y 'wait:custom flags' send:q`. The last frame shows `custom flags -ims (idle, disk, system (AC))`. `caffeinate-after.txt` shows `caffeinate -ims` with a new PID.
+- **While.** Start two disposable targets with `sleep 600 & echo $!`, twice. Write their PIDs as `<a>` and `<b>`. Run `V pty while-start wait:Inactive send:w 'wait:Stay awake while:' send:<a> key:enter 'wait:Until sleep exits' send:q`. `caffeinate-after.txt` shows `caffeinate -is -w <a>`. Then run `V pty while-replace 'wait:Until sleep exits' send:w 'wait:Stay awake while:' send:<b> key:enter 'wait:Replace?' send:y 'wait:PID <b>' send:q`. `caffeinate-after.txt` shows `caffeinate -is -w <b>` with a new PID.
+- **While, missing.** Run `V pty while-missing wait:Inactive send:w 'wait:Stay awake while:' send:no-such-app key:enter "wait:no-such-app isn't running" key:esc 'wait:[q] quit' send:q`. `caffeinate-after.txt` equals `caffeinate-before.txt`.
+- **While, exit.** With the `while-replace` session running, start `(sleep 3; kill <b>) &`, then run `V pty while-exit 'wait:Until sleep exits' wait:Inactive send:q`. `caffeinate-after.txt` reads `(none)`.
 - **Confirm from outside.** Run `V cli status -- status` after any TUI recipe. It reports the same session the last frame showed.
 - **Clean up.** Run `V cleanup`.
 

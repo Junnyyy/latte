@@ -10,6 +10,10 @@ export interface CaffeinateInfo {
   watching: WatchTarget | null
 }
 
+export type WatchResult =
+  | { ok: true; target: WatchTarget }
+  | { ok: false; error: string }
+
 export type TuiResult =
   | { ok: true; info: CaffeinateInfo | null }
   | { ok: false; error: string }

@@ -1,9 +1,10 @@
 import React from "react"
 import { render } from "ink"
 import { Effect, Runtime, Option } from "effect"
-import { CaffeinateService } from "../services/Caffeinate.ts"
+import { CaffeinateService, type StartSpec } from "../services/Caffeinate.ts"
 import { App } from "../tui/App.tsx"
-import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
+import type { CaffeinateInfo, TuiResult, WatchResult } from "../types/index.ts"
+import { resolveWatchTarget } from "../utils/watch.ts"
 
 export const tuiHandler = () =>
   Effect.gen(function* () {
@@ -13,11 +14,11 @@ export const tuiHandler = () =>
     )
     const rt = yield* Effect.runtime<CaffeinateService>()
 
-    const onStart = async (duration: number | undefined, flags: string): Promise<TuiResult> => {
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
       const program = Effect.gen(function* () {
         const s = yield* CaffeinateService
         yield* s.kill().pipe(Effect.catchAll(() => Effect.void))
-        const info = yield* s.start({ flags, duration })
+        const info = yield* s.start(spec)
         return { ok: true as const, info }
       }).pipe(
         Effect.catchAll((e): Effect.Effect<TuiResult> =>
@@ -46,6 +47,23 @@ export const tuiHandler = () =>
       return await Runtime.runPromise(rt)(program)
     }
 
+    const onResolveWatch = async (query: string): Promise<WatchResult> => {
+      const program = Effect.gen(function* () {
+        const s = yield* CaffeinateService
+        const procs = yield* s.processes()
+        const target = yield* resolveWatchTarget(query, procs, process.pid)
+        return { ok: true as const, target }
+      }).pipe(
+        Effect.catchAll((e): Effect.Effect<WatchResult> =>
+          Effect.succeed({
+            ok: false,
+            error: e._tag === "WatchTargetError" ? e.message : `Couldn't list running processes to find ${query}.`,
+          }),
+        ),
+      )
+      return await Runtime.runPromise(rt)(program)
+    }
+
     const onDetect = async (): Promise<CaffeinateInfo | null> => {
       const program = Effect.gen(function* () {
         const s = yield* CaffeinateService
@@ -58,7 +76,7 @@ export const tuiHandler = () =>
     yield* Effect.async<void, never>((resume) => {
       try {
         const { waitUntilExit } = render(
-          React.createElement(App, { initialInfo, onStart, onStop, onDetect }),
+          React.createElement(App, { initialInfo, onStart, onStop, onDetect, onResolveWatch }),
           { stdout: process.stderr, stdin: process.stdin, stderr: process.stderr, patchConsole: false },
         )
 
