@@ -57,17 +57,17 @@ export const toSelection = (opts: {
     }))
   }
 
-  const letters = opts.flags.replace(/^-/, "")
+  const letters = [...opts.flags.replace(/^-/, "")]
   if (letters.length === 0) {
     return Either.left(new SelectionError({ message: `--flags needs at least one letter. Use any of ${LETTERS}.` }))
   }
-  const unknown = [...letters].find((c) => !isFlag(c))
-  if (unknown !== undefined) {
+  if (!letters.every(isFlag)) {
+    const unknown = letters.find((c) => !isFlag(c))
     return Either.left(new SelectionError({
       message: `Unknown flag letter "${unknown}" in --flags. Use any of ${LETTERS}.`,
     }))
   }
-  return Either.right({ kind: "custom", flags: new Set([...letters].filter(isFlag)) })
+  return Either.right({ kind: "custom", flags: new Set(letters) })
 }
 
 /**
