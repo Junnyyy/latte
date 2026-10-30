@@ -35,7 +35,7 @@ Preconditions:
 
 ## Gotchas
 
-- Known bug as of 0.2.1. `tui-timed-replace` fails. With a session running, the input shows `Duration: 90s █`, but `enter` submits the value without its last character and reports `"90" is not a valid duration`. It reproduced in 4 of 4 runs with a 1s pause before `enter`, and in 0 of 6 runs with no session running. Do not shorten the journey to pass it. Report it as failing until the bug is fixed.
+- `tui-timed-replace` once looked broken: `enter` submitted `"90"` for a typed `90s`. The helper caused it. It waited with Tcl `sleep`, which does not read the PTY, so Ink's frames filled the PTY output buffer and latte blocked writing stderr. Keys sent meanwhile reached latte late, together with the next key. Every `pty` pause now keeps reading, and the recipe passed 4 of 4 runs against the same 0.2.1 build. If keys arrive late again, check that the driver reads output while it waits before suspecting latte.
 - Ink draws a first frame before it reads the keyboard. A key sent too early is echoed into the terminal as text and lost. `wait:` pauses 0.3s after each match for this reason, so always `wait:` before a `send:`.
 - The first frame of an active session shows `Running for 0s` before the elapsed time loads. Do not use `Running for` as a handle.
 - The duration input accepts one letter or digit per keystroke. Pasted text is dropped, which is why `send:` types characters one at a time.

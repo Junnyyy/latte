@@ -208,24 +208,28 @@ cmd_pty() {
     echo "log_file -noappend $(tcl_quote "$dir/transcript.raw")"
     echo "spawn -noecho /bin/bash -c $(tcl_quote "set -m; stty rows 40 cols 100;$argv")"
     echo 'proc fail {msg} { puts stderr "latte-verify: $msg"; catch { send "\003" }; exit 1 }'
+    # Tcl sleep leaves the PTY unread. Ink's frames then fill the PTY output buffer, latte
+    # blocks writing stderr, and keys sent meanwhile reach it late. A terminal never stops reading.
+    echo 'match_max 100000'
+    echo 'proc pause {secs} { if {[info exists ::exited]} return; set end [expr {[clock milliseconds] + int($secs * 1000)}]; while {[clock milliseconds] < $end} { expect -timeout 0 -ex "\000never\000" {} eof { set ::exited 1; return }; after 10 } }'
     for step in "${steps[@]}"; do
       case "$step" in
         wait:*)
           local want="${step#wait:}"
-          printf 'expect {\n  -re %s { sleep 0.3 }\n  timeout { fail %s }\n  eof { fail %s }\n}\n' \
+          printf 'expect {\n  -re %s { pause 0.3 }\n  timeout { fail %s }\n  eof { fail %s }\n}\n' \
             "$(tcl_quote "$(styled_text_regex "$want")")" "$(tcl_quote "timed out waiting for '$want'")" "$(tcl_quote "latte exited while waiting for '$want'")" ;;
         send:*)
           local text="${step#send:}" i
           for ((i = 0; i < ${#text}; i++)); do
-            echo "send -- $(tcl_quote "${text:i:1}"); sleep 0.1"
+            echo "send -- $(tcl_quote "${text:i:1}"); pause 0.1"
           done ;;
-        key:enter) echo 'send -- "\r"; sleep 0.1' ;;
-        key:esc) echo 'send -- "\033"; sleep 0.3' ;;
-        key:ctrl-c) echo 'send -- "\003"; sleep 0.1' ;;
-        sleep:*) echo "sleep ${step#sleep:}" ;;
+        key:enter) echo 'send -- "\r"; pause 0.1' ;;
+        key:esc) echo 'send -- "\033"; pause 0.3' ;;
+        key:ctrl-c) echo 'send -- "\003"; pause 0.1' ;;
+        sleep:*) echo "pause ${step#sleep:}" ;;
       esac
     done
-    printf 'expect {\n  eof {}\n  timeout { fail "latte still running after the last step. End TUI steps with send:q." }\n}\n'
+    printf 'if {![info exists ::exited]} {\n  expect {\n    eof {}\n    timeout { fail "latte still running after the last step. End TUI steps with send:q." }\n  }\n}\n'
   } > "$script"
   record_cmd "$@" > "$dir/cmd.txt"
   printf '%q\n' "${steps[@]}" > "$dir/steps.txt"
