@@ -298,6 +298,54 @@ describe("App", () => {
     expect(lastFrame()).not.toContain("Stay awake while:")
   })
 
+  test("a second enter while a watched session starts does not start another", async () => {
+    let finish: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finish = resolve })
+    }
+
+    const { stdin } = render(
+      <App onResolveWatch={resolvesCursor} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    finish({ ok: true, info: { ...activeInfo, watching: cursor } })
+    await wait()
+
+    expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
+  })
+
+  test("pressing o twice while a session starts starts it once", async () => {
+    let finish: (result: TuiResult) => void = () => {}
+    let starts = 0
+    const onStart = (_spec: StartSpec) => {
+      starts++
+      return new Promise<TuiResult>((resolve) => { finish = resolve })
+    }
+
+    const { stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("o")
+    await wait()
+    finish({ ok: true, info: activeInfo })
+    await wait()
+
+    expect(starts).toBe(1)
+  })
+
   test("waiting for an app during a session replaces it after confirm", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {

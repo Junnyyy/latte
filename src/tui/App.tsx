@@ -40,6 +40,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   const [pendingStart, setPendingStart] = useState<PendingStart>({})
   const [promptError, setPromptError] = useState<string | null>(null)
   const activeWatchQuery = useRef<string | null>(null)
+  const startInFlight = useRef(false)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
@@ -71,6 +72,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   }, [info])
 
   const handleStart = useCallback(async (start: PendingStart = {}) => {
+    if (startInFlight.current) return
+    startInFlight.current = true
     try {
       const result = await onStart({ ...start, flags: flagSetToString(sessionFlags) })
       if (result.ok) {
@@ -83,6 +86,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     } catch (e: unknown) {
       setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
       setMode("error")
+    } finally {
+      startInFlight.current = false
     }
   }, [onStart, sessionFlags])
 
