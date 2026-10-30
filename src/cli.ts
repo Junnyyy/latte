@@ -1,7 +1,7 @@
 import { Command, Options } from "@effect/cli"
 import { Either, Option } from "effect"
-import { onHandler } from "./commands/on.ts"
 import { offHandler } from "./commands/off.ts"
+import { startHandler } from "./commands/start.ts"
 import { statusHandler } from "./commands/status.ts"
 import { tuiHandler } from "./commands/tui.ts"
 import { fail } from "./utils/exit.ts"
@@ -18,11 +18,15 @@ const onCommand = Command.make(
       Options.withDescription("Advanced: exact caffeinate flags, e.g. dims. Replaces the preset."),
       Options.optional,
     ),
+    watch: Options.text("while").pipe(
+      Options.withDescription("Stay awake until this app or PID exits, e.g. claude, cursor, 4242"),
+      Options.optional,
+    ),
   },
-  ({ screen, flags }) =>
+  ({ screen, flags, watch }) =>
     Either.match(toSelection({ screen, flags: Option.getOrUndefined(flags) }), {
       onLeft: (e) => fail(e.message),
-      onRight: onHandler,
+      onRight: (selection) => startHandler({ selection, watch: Option.getOrUndefined(watch) }),
     }),
 )
 

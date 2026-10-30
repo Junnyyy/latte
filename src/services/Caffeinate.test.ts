@@ -99,6 +99,65 @@ describe("CaffeinateService.detect", () => {
       expect(result.value.duration).toBe(1800)
     }
   })
+
+  test("names the watched process from its executable", async () => {
+    const result = await runWithMock(
+      {
+        pgrep: "42\n",
+        "comm=": "/Applications/Cursor.app/Contents/MacOS/Cursor\n",
+        ps: "42 Mon Apr  6 10:00:00 2026 caffeinate -is -w 4242\n",
+      },
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.detect()
+      }),
+    )
+    expect(Option.getOrThrow(result).watching).toEqual({ pid: 4242, name: "Cursor" })
+    expect(Option.getOrThrow(result).flags).toBe("-is")
+  })
+
+  test("falls back to the PID when the watched process can't be looked up", async () => {
+    const result = await runWithMock(
+      {
+        pgrep: "42\n",
+        "comm=": new Error("gone"),
+        ps: "42 Mon Apr  6 10:00:00 2026 caffeinate -is -w 4242 -t 600\n",
+      },
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.detect()
+      }),
+    )
+    expect(Option.getOrThrow(result).watching).toEqual({ pid: 4242, name: "PID 4242" })
+    expect(Option.getOrThrow(result).duration).toBe(600)
+  })
+
+  test("a session without -w watches nothing", async () => {
+    const result = await runWithMock(
+      { pgrep: "42\n", ps: "42 Mon Apr  6 10:00:00 2026 caffeinate -is\n" },
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.detect()
+      }),
+    )
+    expect(Option.getOrThrow(result).watching).toBeNull()
+  })
+})
+
+describe("CaffeinateService.processes", () => {
+  test("parses the process table", async () => {
+    const result = await runWithMock(
+      { "ps -axo": "  1     0 /sbin/launchd\n60100     1 /Applications/Cursor.app/Contents/MacOS/Cursor\n" },
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.processes()
+      }),
+    )
+    expect(result).toEqual([
+      { pid: 1, ppid: 0, exe: "/sbin/launchd" },
+      { pid: 60100, ppid: 1, exe: "/Applications/Cursor.app/Contents/MacOS/Cursor" },
+    ])
+  })
 })
 
 describe("CaffeinateService.start", () => {
@@ -123,7 +182,7 @@ describe("CaffeinateService.start", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* CaffeinateService
-        return yield* svc.start(undefined, "-is")
+        return yield* svc.start({ flags: "-is" })
       }).pipe(Effect.provide(testLayer)),
     )
 
@@ -152,12 +211,37 @@ describe("CaffeinateService.start", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* CaffeinateService
-        return yield* svc.start(1800, "-is")
+        return yield* svc.start({ flags: "-is", duration: 1800 })
       }).pipe(Effect.provide(testLayer)),
     )
 
     expect(spawnedArgs).toEqual(["caffeinate", "-is", "-t", "1800"])
     expect(result.duration).toBe(1800)
+  })
+
+  test("spawns caffeinate with -w before -t for a watched session", async () => {
+    let spawnedArgs: string[] = []
+    const testLayer = CaffeinateService.DefaultWithoutDependencies.pipe(
+      Layer.provide(
+        Layer.succeed(ProcessService, {
+          exec: (args: string[]) => Effect.fail(new ProcessError({ command: args.join(" "), cause: "" })),
+          spawnDetached: (args: string[]) => {
+            spawnedArgs = args
+            return Effect.succeed(12345)
+          },
+        } as any),
+      ),
+    )
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CaffeinateService
+        return yield* svc.start({ flags: "-is", duration: 600, watch: { pid: 4242, name: "Cursor" } })
+      }).pipe(Effect.provide(testLayer)),
+    )
+
+    expect(spawnedArgs).toEqual(["caffeinate", "-is", "-w", "4242", "-t", "600"])
+    expect(result.watching).toEqual({ pid: 4242, name: "Cursor" })
   })
 
   test("spawns caffeinate with custom flags", async () => {
@@ -181,7 +265,7 @@ describe("CaffeinateService.start", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* CaffeinateService
-        return yield* svc.start(undefined, "-dimsu")
+        return yield* svc.start({ flags: "-dimsu" })
       }).pipe(Effect.provide(testLayer)),
     )
 
@@ -210,7 +294,7 @@ describe("CaffeinateService.start", () => {
     await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* CaffeinateService
-        return yield* svc.start(undefined, "")
+        return yield* svc.start({ flags: "" })
       }).pipe(Effect.provide(testLayer)),
     )
 

@@ -17,7 +17,7 @@ export const tuiHandler = () =>
       const program = Effect.gen(function* () {
         const s = yield* CaffeinateService
         yield* s.kill().pipe(Effect.catchAll(() => Effect.void))
-        const info = yield* s.start(duration, flags)
+        const info = yield* s.start({ flags, duration })
         return { ok: true as const, info }
       }).pipe(
         Effect.catchAll((e): Effect.Effect<TuiResult> =>

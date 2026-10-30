@@ -20,3 +20,7 @@ export class DurationParseError extends Data.TaggedError("DurationParseError")<{
 export class SelectionError extends Data.TaggedError("SelectionError")<{
   message: string
 }> {}
+
+export class WatchTargetError extends Data.TaggedError("WatchTargetError")<{
+  message: string
+}> {}

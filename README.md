@@ -67,6 +67,7 @@ Or manually: `rm ~/.local/bin/latte`
 | You hand work to an agent and walk away for lunch, a meeting, or the night | `latte on` | The Mac. The screen sleeps and locks as usual. |
 | You watch the agent's output, or you present from this Mac | `latte on --screen` | The Mac and the screen. |
 | You start a run that should stop keeping the Mac awake by itself | `latte 2h` | The Mac, for 2 hours. Add `--screen` to keep the screen on too. |
+| You want the Mac awake only while an app or agent session is open | `latte on --while cursor` | The Mac, until Cursor quits. See [Stay awake while an app runs](#stay-awake-while-an-app-runs). |
 | You are an agent or a script that manages its own session | `latte on`, then `latte off` | Same as `latte on`. Output is plain text and `off` is idempotent. |
 | You need specific `caffeinate` assertions | `latte on --flags dims` | Exactly the flags you pass. See [Advanced: exact flags](#advanced-exact-flags). |
 
@@ -91,6 +92,29 @@ latte 90s
 
 The duration accepts `s`, `m`, and `h`. When the time runs out, `caffeinate` exits by itself and the Mac can sleep again.
 
+### Stay awake while an app runs
+
+```sh
+latte on --while claude          # until this Claude Code session ends
+latte on --while cursor          # until Cursor quits
+latte 2h --while code --screen   # until VS Code quits, for at most 2 hours
+latte on --while 4242            # until the process with PID 4242 exits
+latte on --while $$              # until this terminal closes
+```
+
+`--while` takes an app name or a PID. When that process exits, `caffeinate` exits too and the Mac can sleep again. With a duration as well, the session ends at whichever comes first.
+
+| Name | Watches |
+|------|---------|
+| `claude` | A Claude Code session |
+| `claude-desktop` | The Claude desktop app |
+| `code` or `vscode` | Visual Studio Code |
+| `cursor`, `codex`, `zed`, ... | Any app by its name, or any program by its executable name |
+
+latte watches one process per session. When several processes match a name, such as two Claude Code sessions, latte picks the one it runs inside. Run `latte on --while claude` from the session you want to keep alive, or ask the agent to run it. Otherwise latte lists the matching PIDs and exits with code `1`. Pass one of them instead.
+
+If the app is not running, latte exits with code `1` and leaves any running session alone.
+
 ### Turn off
 
 ```sh
@@ -105,7 +129,7 @@ latte off
 latte status
 ```
 
-`latte status` shows what latte keeps awake, how long it has run, and the time left in a timed session.
+`latte status` shows what latte keeps awake, how long it has run, the time left in a timed session, and the app it waits for.
 
 ### Interactive mode
 
@@ -169,7 +193,7 @@ In the dashboard, press **f** to toggle single letters, **r** to reset to the pr
 latte has no config files and no PID files. Every command inspects the running processes:
 
 1. `pgrep -x caffeinate` finds a running `caffeinate`.
-2. `ps` reads its flags, start time, and timeout.
+2. `ps` reads its flags, start time, timeout, and the PID it waits for (`-w`).
 3. `pkill -x caffeinate` stops it.
 
 The presets map to these flags:
@@ -189,12 +213,14 @@ Every command is non-interactive when its output is not a terminal:
 latte on            # before a long task
 latte 2h            # or with a time limit
 latte on --screen   # keep the screen on, for example to watch progress
+latte on --while claude   # stay awake until this agent session ends
 latte status        # check what is running
 latte off           # clean up
 ```
 
 - When the output is not a terminal, latte prints plain text and opens no dashboard.
 - `latte off` is idempotent. Run it unconditionally in scripts.
+- `latte on --while claude` run from a Claude Code session watches that session. The Mac can sleep after the session ends, even if nobody runs `latte off`.
 - An unknown option fails with exit code `1`. latte does not ignore it.
 - Exit codes: `0` for success, `1` for an error.
 

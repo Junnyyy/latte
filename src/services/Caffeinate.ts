@@ -1,7 +1,16 @@
 import { Effect, Option } from "effect"
-import { CaffeinateSpawnError, NoCaffeinateError } from "../errors/index.ts"
+import { CaffeinateSpawnError, NoCaffeinateError, ProcessError } from "../errors/index.ts"
 import { ProcessService } from "./Process.ts"
 import type { CaffeinateInfo } from "../types/index.ts"
+import { nameOf, parsePsTable, type ProcessEntry, type WatchTarget } from "../utils/watch.ts"
+
+export interface StartSpec {
+  flags: string
+  /** Seconds until caffeinate exits on its own (-t). */
+  duration?: number
+  /** caffeinate exits when this process exits (-w). */
+  watch?: WatchTarget
+}
 
 export class CaffeinateService extends Effect.Service<CaffeinateService>()("CaffeinateService", {
   effect: Effect.gen(function* () {
@@ -28,12 +37,26 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         const line = psOutput.trim()
         if (line.length === 0) return Option.none()
 
-        return Option.some(parsePsLine(line))
+        const { watchPid, ...info } = parsePsLine(line)
+        if (watchPid === null) return Option.some({ ...info, watching: null })
+
+        const exe = yield* proc.exec(["ps", "-o", "comm=", "-p", String(watchPid)]).pipe(
+          Effect.map((out) => out.trim()),
+          Effect.catchAll(() => Effect.succeed("")),
+        )
+        const name = exe ? nameOf(exe) : `PID ${watchPid}`
+        return Option.some({ ...info, watching: { pid: watchPid, name } })
       })
 
-    const start = (duration: number | undefined, flags: string): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
+    const processes = (): Effect.Effect<ProcessEntry[], ProcessError> =>
+      proc.exec(["ps", "-axo", "pid=,ppid=,comm="]).pipe(Effect.map(parsePsTable))
+
+    const start = ({ flags, duration, watch }: StartSpec): Effect.Effect<CaffeinateInfo, CaffeinateSpawnError> =>
       Effect.gen(function* () {
         const args = flags ? ["caffeinate", flags] : ["caffeinate"]
+        if (watch !== undefined) {
+          args.push("-w", String(watch.pid))
+        }
         if (duration !== undefined) {
           args.push("-t", String(duration))
         }
@@ -57,6 +80,7 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
           startTime: new Date(),
           duration: duration ?? null,
           remaining: duration ?? null,
+          watching: watch ?? null,
         }
       })
 
@@ -66,13 +90,13 @@ export class CaffeinateService extends Effect.Service<CaffeinateService>()("Caff
         Effect.catchAll(() => Effect.fail(new NoCaffeinateError())),
       )
 
-    return { detect, start, kill }
+    return { detect, start, kill, processes }
   }),
   dependencies: [ProcessService.Default],
 }) {}
 
-/** Parse a ps output line into CaffeinateInfo. */
-function parsePsLine(line: string): CaffeinateInfo {
+/** Parse a ps output line into CaffeinateInfo, with the raw -w PID in place of its name. */
+function parsePsLine(line: string): Omit<CaffeinateInfo, "watching"> & { watchPid: number | null } {
   // ps -o pid=,lstart=,args= format:
   // "  42 Mon Apr  6 10:00:00 2026 caffeinate -imsu -t 1800"
   const trimmed = line.trim()
@@ -97,6 +121,9 @@ function parsePsLine(line: string): CaffeinateInfo {
   const durationMatch = argsStr.match(/-t\s+(\d+)/)
   const duration = durationMatch ? parseInt(durationMatch[1]!, 10) : null
 
+  const watchMatch = argsStr.match(/-w\s+(\d+)/)
+  const watchPid = watchMatch ? parseInt(watchMatch[1]!, 10) : null
+
   // Compute remaining time
   let remaining: number | null = null
   if (duration !== null) {
@@ -104,5 +131,5 @@ function parsePsLine(line: string): CaffeinateInfo {
     remaining = Math.max(0, duration - elapsed)
   }
 
-  return { pid, flags, startTime, duration, remaining }
+  return { pid, flags, startTime, duration, remaining, watchPid }
 }

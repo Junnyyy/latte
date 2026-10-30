@@ -10,6 +10,7 @@ const activeInfo: CaffeinateInfo = {
   startTime: new Date(Date.now() - 60_000), // started 1 min ago
   duration: null,
   remaining: null,
+  watching: null,
 }
 
 const timedInfo: CaffeinateInfo = {
@@ -18,6 +19,7 @@ const timedInfo: CaffeinateInfo = {
   startTime: new Date(Date.now() - 60_000),
   duration: 1800,
   remaining: 1740,
+  watching: null,
 }
 
 const noop = async (_duration?: number, _flags?: string): Promise<TuiResult> => ({ ok: true, info: null })
@@ -62,6 +64,15 @@ describe("App", () => {
     const frame = lastFrame()
     expect(frame).toContain("Active")
     expect(frame).toContain("Remaining")
+  })
+
+  test("renders what a watched session waits for instead of indefinite", () => {
+    const watchedInfo: CaffeinateInfo = { ...activeInfo, watching: { pid: 123, name: "Cursor" } }
+    const { lastFrame } = render(
+      <App initialInfo={watchedInfo} onStart={noop} onStop={noop} onDetect={async () => watchedInfo} />,
+    )
+    expect(lastFrame()).toContain("Until Cursor exits (PID 123)")
+    expect(lastFrame()).not.toContain("indefinite")
   })
 
   test("shows action bar with keybinds", () => {

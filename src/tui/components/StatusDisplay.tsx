@@ -35,10 +35,13 @@ export const StatusDisplay: React.FC<Props> = ({ info, elapsed }) => {
       <Text color="green">● Active — preventing sleep</Text>
       <Text>  {describeFlags(info.flags)}</Text>
       <Text>  Running for {formatDuration(elapsed)}</Text>
+      {info.watching && (
+        <Text>  Until {info.watching.name} exits <Text dimColor>(PID {info.watching.pid})</Text></Text>
+      )}
       {remaining !== null ? (
         <Text>  Remaining: <Text color={remainingColor}>{formatDuration(remaining)}</Text></Text>
       ) : (
-        <Text dimColor>  Duration: indefinite</Text>
+        !info.watching && <Text dimColor>  Duration: indefinite</Text>
       )}
     </Box>
   )

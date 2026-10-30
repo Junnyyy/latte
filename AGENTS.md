@@ -55,6 +55,21 @@ idle sleep. `PreventUserIdleSystemSleep` still allows sleep on lid close.
 The presets in `src/utils/flags.ts` follow from these results. Keep `-u` out of
 the presets, because its effect depends on whether the session has a timeout.
 
+## Watching a process
+
+`--while` passes one PID to `caffeinate -w`. Measured on macOS 27:
+
+- `caffeinate` honors only the last `-w`. A second `-w` replaces the first.
+- With `-t` as well, `caffeinate` exits at whichever comes first.
+- With a PID that does not exist, `caffeinate` exits at once.
+
+`ps -axo pid=,ppid=,comm=` prints the full executable path as `comm`. A symlinked
+binary shows the symlink path, so the native Claude Code install reads as
+`claude`. Claude Code started by the desktop app runs as
+`claude.app/Contents/MacOS/claude`, and the desktop app itself as
+`Claude.app/Contents/MacOS/Claude`. Match `claude` case-sensitively, or the
+desktop app matches too.
+
 ## Release boundaries
 
 `bun run release patch` bumps the version, builds, commits, tags, pushes, and

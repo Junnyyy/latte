@@ -70,13 +70,20 @@ export const toSelection = (opts: {
   return Either.right({ kind: "custom", flags: new Set(letters) })
 }
 
+export interface StartArgs {
+  selection: Selection
+  /** The --while app name or PID. */
+  watch: string | undefined
+}
+
 /**
- * Parse the arguments after a duration, as in `latte 30m --screen`.
+ * Parse the arguments after a duration, as in `latte 30m --screen --while cursor`.
  * @effect/cli parses `latte on`, so only this path reads raw argv.
  */
-export const parseSelectionArgs = (args: readonly string[]): Either.Either<Selection, SelectionError> => {
+export const parseStartArgs = (args: readonly string[]): Either.Either<StartArgs, SelectionError> => {
   let screen = false
   let flags: string | undefined
+  let watch: string | undefined
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!
@@ -86,6 +93,10 @@ export const parseSelectionArgs = (args: readonly string[]): Either.Either<Selec
       flags = args[++i] ?? ""
     } else if (arg.startsWith("--flags=")) {
       flags = arg.slice("--flags=".length)
+    } else if (arg === "--while") {
+      watch = args[++i] ?? ""
+    } else if (arg.startsWith("--while=")) {
+      watch = arg.slice("--while=".length)
     } else {
       return Either.left(new SelectionError({
         message: `Unknown option ${arg}. Use --flags for exact caffeinate flags.`,
@@ -93,5 +104,5 @@ export const parseSelectionArgs = (args: readonly string[]): Either.Either<Selec
     }
   }
 
-  return toSelection({ screen, flags })
+  return Either.map(toSelection({ screen, flags }), (selection) => ({ selection, watch }))
 }

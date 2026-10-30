@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import { DurationParseError } from "../errors/index.ts"
+import type { WatchTarget } from "./watch.ts"
 
 const UNIT_MULTIPLIERS: Record<string, number> = {
   s: 1,
@@ -59,4 +60,16 @@ export const formatDuration = (totalSeconds: number): string => {
   if (seconds > 0) parts.push(`${seconds}s`)
 
   return parts.join(" ")
+}
+
+/**
+ * How a session ends, for people: "2h", "until Cursor exits",
+ * "2h or until Cursor exits", or null when it runs until stopped.
+ */
+export const describeEnd = (duration: number | null, watching: WatchTarget | null): string | null => {
+  const parts = [
+    ...(duration !== null ? [formatDuration(duration)] : []),
+    ...(watching !== null ? [`until ${watching.name} exits`] : []),
+  ]
+  return parts.length > 0 ? parts.join(" or ") : null
 }
