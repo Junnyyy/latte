@@ -34,6 +34,12 @@ results are wrong.
 Ink draws its first frame before it reads the keyboard. A key sent before then is
 echoed as text and lost. Wait for a frame, then pause briefly before sending keys.
 
+A PTY driver must keep reading output while it waits. Ink redraws the whole frame
+on every key and every status tick. If nothing reads the PTY, the output buffer
+fills, latte blocks writing stderr, and later keys arrive late in one chunk. Tcl
+`sleep` in `expect` does not read. A bare Bun script that writes 2 KB to stderr
+per key shows the same delay under `sleep` and none under a reading wait.
+
 ## caffeinate assertions
 
 Check a claim about a `caffeinate` flag with `pmset -g assertions` while the
