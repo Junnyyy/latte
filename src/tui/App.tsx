@@ -20,13 +20,12 @@ export interface Props {
   onDetect: () => Promise<CaffeinateInfo | null>
 }
 
-const actions = [
-  { key: "o", label: "on" },
-  { key: "x", label: "off" },
-  { key: "t", label: "timed" },
-  { key: "f", label: "flags" },
-  { key: "q", label: "quit" },
-]
+const toggle = (flags: ReadonlySet<Flag>, flag: Flag): Set<Flag> => {
+  const next = new Set(flags)
+  if (next.has(flag)) next.delete(flag)
+  else next.add(flag)
+  return next
+}
 
 export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect }) => {
   const { exit } = useApp()
@@ -117,15 +116,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
 
   // Flag picker handlers
   const handleFlagToggle = useCallback((flag: Flag) => {
-    setPickerFlags((prev) => {
-      const next = new Set(prev)
-      if (next.has(flag)) {
-        next.delete(flag)
-      } else {
-        next.add(flag)
-      }
-      return next
-    })
+    setPickerFlags((prev) => toggle(prev, flag))
   }, [])
 
   const handleFlagConfirm = useCallback(() => {
@@ -175,6 +166,10 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
     if (input === "t") {
       setDurationError(null)
       setMode("duration-input")
+    }
+
+    if (input === "s") {
+      setSessionFlags((prev) => toggle(prev, "d"))
     }
 
     if (input === "f") {
@@ -238,7 +233,18 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect })
         </Box>
       )}
 
-      {mode !== "flag-picker" && <ActionBar actions={actions} />}
+      {mode !== "flag-picker" && (
+        <ActionBar
+          actions={[
+            { key: "o", label: "on" },
+            { key: "x", label: "off" },
+            { key: "t", label: "timed" },
+            { key: "s", label: "screen", toggled: sessionFlags.has("d") },
+            { key: "f", label: "advanced" },
+            { key: "q", label: "quit" },
+          ]}
+        />
+      )}
     </Box>
   )
 }

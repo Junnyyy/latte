@@ -4,6 +4,7 @@ import { Box, Text } from "ink"
 interface Action {
   key: string
   label: string
+  toggled?: boolean
 }
 
 interface Props {
@@ -16,6 +17,8 @@ export const ActionBar: React.FC<Props> = ({ actions }) => (
       <Box key={action.key} gap={0}>
         <Text bold color="cyan">[{action.key}]</Text>
         <Text dimColor> {action.label}</Text>
+        {action.toggled === true && <Text color="green"> ●</Text>}
+        {action.toggled === false && <Text dimColor> ○</Text>}
       </Box>
     ))}
   </Box>
