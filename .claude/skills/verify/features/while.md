@@ -13,7 +13,8 @@
 
 ## How to get to it (user POV)
 
-- Run `latte on --while <app|pid>`, or `latte <duration> --while <app|pid>`. Names include `claude`, `claude-desktop`, `code`, `cursor`, `codex`, and any app or executable name.
+- Run `latte on --while <app|pid>`, or `latte <duration> --while <app|pid>`.
+- In the TUI, press `w` and type the app name or PID. The TUI recipes are in [`tui.md`](./tui.md). Names include `claude`, `claude-desktop`, `code`, `cursor`, `codex`, and any app or executable name.
 
 ## Driving it with latte-verify
 

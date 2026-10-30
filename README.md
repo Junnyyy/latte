@@ -115,6 +115,8 @@ latte watches one process per session. When several processes match a name, such
 
 If the app is not running, latte exits with code `1` and leaves any running session alone.
 
+In the dashboard, press **w** and type the name or PID. To combine a duration with `--while`, use the command line.
+
 ### Turn off
 
 ```sh
@@ -142,7 +144,8 @@ In a terminal, `latte` with no arguments opens a live dashboard. It updates ever
 - **o** turns latte on.
 - **x** turns latte off.
 - **t** starts a timed session. The dashboard asks for a duration.
-- **s** toggles whether the screen stays on. The choice applies to the next **o** or **t**. It does not change a running session. Until you restart, the dashboard shows a `Next start:` line.
+- **w** starts a session that lasts until an app or PID exits, like `--while`. The dashboard asks for the name. If the app isn't running, the error shows under the input and the running session stays.
+- **s** toggles whether the screen stays on. The choice applies to the next **o**, **t**, or **w**. It does not change a running session. Until you restart, the dashboard shows a `Next start:` line.
 - **f** opens the advanced flag picker. See [Advanced: exact flags](#advanced-exact-flags).
 - **q** quits the dashboard. `caffeinate` keeps running.
 
