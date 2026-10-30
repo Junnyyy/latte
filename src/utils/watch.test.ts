@@ -96,6 +96,10 @@ describe("resolveWatchTarget", () => {
     expect(errorOf("Xcode")).toBe("Xcode isn't running. Open it first, or pass its PID.")
   })
 
+  test("an empty query is an error", () => {
+    expect(errorOf(" ")).toBe("--while needs an app name or PID, e.g. claude, cursor, 4242.")
+  })
+
   test("latte never watches itself", () => {
     expect(resolve("latte")).toEqual({ pid: 58800, name: "latte" })
   })

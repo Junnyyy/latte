@@ -86,6 +86,7 @@ export const resolveWatchTarget = (
   const toTarget = (p: ProcessEntry): WatchTarget => ({ pid: p.pid, name: nameOf(p.exe) })
 
   const trimmed = query.trim()
+  if (trimmed === "") return failure("--while needs an app name or PID, e.g. claude, cursor, 4242.")
   if (/^\d+$/.test(trimmed)) {
     const proc = byPid.get(Number(trimmed))
     return proc ? Either.right(toTarget(proc)) : failure(`No process with PID ${trimmed} is running.`)

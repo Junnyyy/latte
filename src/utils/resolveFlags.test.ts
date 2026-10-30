@@ -1,6 +1,6 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test"
 import { Either } from "effect"
-import { initialFlagSet, parseEnvFlags, parseSelectionArgs, resolveFlags, toSelection } from "./resolveFlags.ts"
+import { initialFlagSet, parseEnvFlags, parseStartArgs, resolveFlags, toSelection } from "./resolveFlags.ts"
 
 const originalEnv = process.env.LATTE_FLAGS
 beforeEach(() => {
@@ -28,10 +28,10 @@ const captureStderr = (fn: () => void): string => {
 
 /** The caffeinate flag string `latte 30m <args>` would run. */
 const resolvedArgs = (...args: string[]): string =>
-  resolveFlags(Either.getOrThrow(parseSelectionArgs(args)))
+  resolveFlags(Either.getOrThrow(parseStartArgs(args)).selection)
 
 const argsError = (...args: string[]): string | undefined =>
-  Either.match(parseSelectionArgs(args), { onLeft: (e) => e.message, onRight: () => undefined })
+  Either.match(parseStartArgs(args), { onLeft: (e) => e.message, onRight: () => undefined })
 
 describe("parseEnvFlags", () => {
   test("parses flags with dashes and whitespace", () => {
@@ -111,6 +111,22 @@ describe("selecting flags from arguments", () => {
   test("any other argument is an error", () => {
     expect(argsError("--no-system")).toBe("Unknown option --no-system. Use --flags for exact caffeinate flags.")
     expect(argsError("--screen", "-m")).toBe("Unknown option -m. Use --flags for exact caffeinate flags.")
+  })
+})
+
+describe("--while after a duration", () => {
+  const watchOf = (...args: string[]) => Either.getOrThrow(parseStartArgs(args)).watch
+
+  test("takes the app or PID as the next argument or after =", () => {
+    expect(watchOf()).toBeUndefined()
+    expect(watchOf("--while", "cursor")).toBe("cursor")
+    expect(watchOf("--while=4242")).toBe("4242")
+    expect(watchOf("--while")).toBe("")
+    expect(watchOf("--screen", "--while", "Visual Studio Code")).toBe("Visual Studio Code")
+  })
+
+  test("combines with the flag selection", () => {
+    expect(resolvedArgs("--while", "claude", "--screen")).toBe("-dis")
   })
 })
 

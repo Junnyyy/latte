@@ -18,11 +18,15 @@ const onCommand = Command.make(
       Options.withDescription("Advanced: exact caffeinate flags, e.g. dims. Replaces the preset."),
       Options.optional,
     ),
+    watch: Options.text("while").pipe(
+      Options.withDescription("Stay awake until this app or PID exits, e.g. claude, cursor, 4242"),
+      Options.optional,
+    ),
   },
-  ({ screen, flags }) =>
+  ({ screen, flags, watch }) =>
     Either.match(toSelection({ screen, flags: Option.getOrUndefined(flags) }), {
       onLeft: (e) => fail(e.message),
-      onRight: (selection) => startHandler({ selection }),
+      onRight: (selection) => startHandler({ selection, watch: Option.getOrUndefined(watch) }),
     }),
 )
 

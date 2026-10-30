@@ -7,7 +7,7 @@ import { startHandler } from "./commands/start.ts"
 import { CaffeinateService } from "./services/Caffeinate.ts"
 import { ProcessService } from "./services/Process.ts"
 import { fail } from "./utils/exit.ts"
-import { parseSelectionArgs } from "./utils/resolveFlags.ts"
+import { parseStartArgs } from "./utils/resolveFlags.ts"
 
 const AppLayer = CaffeinateService.Default.pipe(
   Layer.provideMerge(ProcessService.Default),
@@ -22,9 +22,10 @@ const durationPattern = /^\d+(s|m|h)$/i
 const firstArg = userArgs[0]
 
 const program = firstArg && durationPattern.test(firstArg)
-  ? Either.match(parseSelectionArgs(userArgs.slice(1)), {
+  ? Either.match(parseStartArgs(userArgs.slice(1)), {
       onLeft: (e) => fail(e.message),
-      onRight: (selection) => startHandler({ selection, duration: firstArg }).pipe(Effect.provide(MainLayer)),
+      onRight: ({ selection, watch }) =>
+        startHandler({ selection, duration: firstArg, watch }).pipe(Effect.provide(MainLayer)),
     })
   : cli(process.argv).pipe(
       Effect.provide(MainLayer),
