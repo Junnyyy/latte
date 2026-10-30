@@ -99,6 +99,7 @@ latte on --while claude          # until this Claude Code session ends
 latte on --while cursor          # until Cursor quits
 latte 2h --while code --screen   # until VS Code quits, for at most 2 hours
 latte on --while 4242            # until the process with PID 4242 exits
+latte on --while $$              # until this terminal closes
 ```
 
 `--while` takes an app name or a PID. When that process exits, `caffeinate` exits too and the Mac can sleep again. With a duration as well, the session ends at whichever comes first.
