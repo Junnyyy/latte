@@ -46,6 +46,13 @@ for the `pty` drive. The shim sleeps 3 seconds, then runs `/usr/bin/pkill "$@"`.
 latte runs `ps`, `pgrep`, and `pkill` by bare name, so the shim takes effect.
 Have the shim log each call, to prove the drive used it.
 
+To hold the TUI's status check, slow only `ps -p <pid>` for the running
+session's PID. The status check reads that PID, and a replace start reads the
+new one, so the start stays fast while the check stays pending.
+
+In a confirm dialog, `q` cancels the dialog and does not quit. A drive that
+can end on `Replace?` must send `n` before `send:q`.
+
 ## Exit codes in tests
 
 `fail` in `src/utils/exit.ts` sets `process.exitCode = 1`, and `bun test` exits
