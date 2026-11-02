@@ -414,6 +414,83 @@ describe("App", () => {
     expect(starts).toBe(1)
   })
 
+  test("a while target that resolves after another start finishes asks to replace it", async () => {
+    const first = { pid: 1, name: "Slack" }
+    const resolves: ((result: WatchResult) => void)[] = []
+    const onResolveWatch = (_query: string) => new Promise<WatchResult>((resolve) => { resolves.push(resolve) })
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("w")
+    await wait()
+    stdin.write("s")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    resolves[0]!({ ok: true, target: first })
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    finishStart({ ok: true, info: { ...activeInfo, watching: first } })
+    await wait()
+    resolves[1]!({ ok: true, target: cursor })
+    await wait()
+
+    expect(lastFrame()).toContain("Replace?")
+    expect(starts).toEqual([{ watch: first, flags: "-is" }])
+
+    stdin.write("y")
+    await wait()
+    expect(starts).toEqual([{ watch: first, flags: "-is" }, { watch: cursor, flags: "-is" }])
+  })
+
+  test("a duration entered while a session starts asks to replace it", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("t")
+    await wait()
+    for (const char of "30m") {
+      stdin.write(char)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+    finishStart({ ok: true, info: activeInfo })
+    await wait()
+
+    expect(lastFrame()).toContain("Replace?")
+    expect(starts).toEqual([{ flags: "-is" }])
+
+    stdin.write("y")
+    await wait()
+    expect(starts).toEqual([{ flags: "-is" }, { duration: 1800, flags: "-is" }])
+  })
+
   test("waiting for an app during a session replaces it after confirm", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {
