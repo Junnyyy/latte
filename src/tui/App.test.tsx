@@ -561,6 +561,37 @@ describe("App", () => {
     expect(starts).toEqual([{ flags: "-is" }])
   })
 
+  test("cancelling a duration that waits on a start that fails starts nothing", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("t")
+    await wait()
+    for (const char of "30m") {
+      stdin.write(char)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    finishStart({ ok: false, error: "Failed to start: boom" })
+    await wait()
+
+    expect(lastFrame()).toContain("Failed to start: boom")
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
   test("a second enter on a duration while it starts does not ask to replace it", async () => {
     let finishStart: (result: TuiResult) => void = () => {}
     const starts: StartSpec[] = []
