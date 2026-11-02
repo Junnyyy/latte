@@ -721,6 +721,128 @@ describe("App", () => {
     expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
   })
 
+  test("a status check that started before a replace does not hide the new session", async () => {
+    const detects: ((info: CaffeinateInfo | null) => void)[] = []
+    const onDetect = () => new Promise<CaffeinateInfo | null>((resolve) => { detects.push(resolve) })
+    const replaced: CaffeinateInfo = { ...activeInfo, pid: 43, watching: cursor }
+    const starts: StartSpec[] = []
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
+      starts.push(spec)
+      return { ok: true, info: replaced }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={onDetect} />,
+    )
+
+    await wait(1100)
+    expect(detects.length).toBe(1)
+    stdin.write("o")
+    await wait()
+    stdin.write("y")
+    await wait()
+    expect(lastFrame()).toContain("Until Cursor exits")
+
+    detects[0]!(null)
+    await wait()
+    expect(lastFrame()).toContain("Until Cursor exits")
+
+    stdin.write("o")
+    await wait()
+    expect(lastFrame()).toContain("Replace?")
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
+  test("a status check during a replace does not hide the new session", async () => {
+    const detects: ((info: CaffeinateInfo | null) => void)[] = []
+    const onDetect = () => new Promise<CaffeinateInfo | null>((resolve) => { detects.push(resolve) })
+    const replaced: CaffeinateInfo = { ...activeInfo, pid: 43, watching: cursor }
+    let finishStart: (result: TuiResult) => void = () => {}
+    const onStart = (_spec: StartSpec) => new Promise<TuiResult>((resolve) => { finishStart = resolve })
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={onDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("y")
+    await wait(1100)
+    finishStart({ ok: true, info: replaced })
+    await wait()
+    for (const resolve of detects) resolve(null)
+    await wait()
+
+    expect(lastFrame()).toContain("Until Cursor exits")
+  })
+
+  test("a status check that started before a stop does not bring the session back", async () => {
+    const detects: ((info: CaffeinateInfo | null) => void)[] = []
+    const onDetect = () => new Promise<CaffeinateInfo | null>((resolve) => { detects.push(resolve) })
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={onDetect} />,
+    )
+
+    await wait(1100)
+    expect(detects.length).toBe(1)
+    stdin.write("x")
+    await wait()
+    expect(lastFrame()).toContain("Inactive")
+
+    detects[0]!(activeInfo)
+    await wait()
+    expect(lastFrame()).toContain("Inactive")
+  })
+
+  test("a start pressed while a stop runs starts once the stop finishes", async () => {
+    let finishStop: (result: TuiResult) => void = () => {}
+    const onStop = () => new Promise<TuiResult>((resolve) => { finishStop = resolve })
+    const starts: StartSpec[] = []
+    const onStart = async (spec: StartSpec): Promise<TuiResult> => {
+      starts.push(spec)
+      return { ok: true, info: activeInfo }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={onStop} onDetect={async () => activeInfo} />,
+    )
+
+    stdin.write("x")
+    await wait()
+    stdin.write("o")
+    await wait()
+    finishStop({ ok: true, info: null })
+    await wait()
+
+    expect(lastFrame()).not.toContain("Replace?")
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
+  test("pressing x while a session starts stops it once it starts", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const onStart = (_spec: StartSpec) => new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    let stops = 0
+    const onStop = async (): Promise<TuiResult> => {
+      stops++
+      return { ok: true, info: null }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={onStop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("x")
+    await wait()
+    finishStart({ ok: true, info: activeInfo })
+    await wait()
+
+    expect(stops).toBe(1)
+    expect(lastFrame()).toContain("Inactive")
+  })
+
   test("cancelling confirm dialog returns to list", async () => {
     const { lastFrame, stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,

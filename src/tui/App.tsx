@@ -42,8 +42,10 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   const activePromptSubmit = useRef<symbol | null>(null)
   // Start decisions read this instead of `info`, which lags until the next render.
   const liveInfo = useRef(initialInfo)
-  // Resolves to whether the start succeeded.
-  const startInFlight = useRef<Promise<boolean> | null>(null)
+  // Resolves to whether the start or stop succeeded.
+  const changeInFlight = useRef<Promise<boolean> | null>(null)
+  // Bumped when a start or stop begins, so a status check that overlaps one is dropped.
+  const sessionGeneration = useRef(0)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
@@ -57,7 +59,10 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     if (!info) return
 
     const interval = setInterval(async () => {
+      if (changeInFlight.current) return
+      const generation = sessionGeneration.current
       const current = await onDetect()
+      if (generation !== sessionGeneration.current) return
       if (!current) {
         showInfo(null)
         setElapsed(0)
@@ -79,8 +84,18 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     }
   }, [info])
 
-  const handleStart = useCallback((start: PendingStart) => {
-    startInFlight.current ??= (async () => {
+  const changeSession = useCallback((change: () => Promise<boolean>) => {
+    if (!changeInFlight.current) {
+      sessionGeneration.current++
+      changeInFlight.current = change().finally(() => {
+        changeInFlight.current = null
+      })
+    }
+    return changeInFlight.current
+  }, [])
+
+  const handleStart = useCallback((start: PendingStart) =>
+    changeSession(async () => {
       try {
         const result = await onStart({ ...start, flags: flagSetToString(sessionFlags) })
         if (result.ok) {
@@ -96,14 +111,10 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
         setMode("error")
         return false
       }
-    })().finally(() => {
-      startInFlight.current = null
-    })
-    return startInFlight.current
-  }, [onStart, sessionFlags, showInfo])
+    }), [changeSession, onStart, sessionFlags, showInfo])
 
   const requestStart = useCallback(async (start: PendingStart, isCurrent: () => boolean = () => true) => {
-    if (startInFlight.current && !(await startInFlight.current)) return
+    if (changeInFlight.current && !(await changeInFlight.current)) return
     if (!isCurrent()) return
     if (liveInfo.current) {
       setPendingStart(start)
@@ -124,19 +135,27 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     }
   }, [])
 
-  const handleStop = useCallback(async () => {
-    try {
-      const result = await onStop()
-      showInfo(null)
-      setMode("idle")
-      if (!result.ok) {
-        // Process was already gone — not a real error for the user
+  const handleStop = useCallback(() =>
+    changeSession(async () => {
+      try {
+        const result = await onStop()
+        showInfo(null)
+        setMode("idle")
+        if (!result.ok) {
+          // Process was already gone — not a real error for the user
+        }
+        return true
+      } catch (e: unknown) {
+        setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
+        setMode("error")
+        return false
       }
-    } catch (e: unknown) {
-      setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
-      setMode("error")
-    }
-  }, [onStop, showInfo])
+    }), [changeSession, onStop, showInfo])
+
+  const requestStop = useCallback(async () => {
+    if (changeInFlight.current && !(await changeInFlight.current)) return
+    if (liveInfo.current) await handleStop()
+  }, [handleStop])
 
   const handleDurationSubmit = useCallback((value: string) => {
     const result = Effect.runSyncExit(parseDuration(value))
@@ -152,7 +171,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
 
   const handleWatchSubmit = useCallback((query: string) =>
     submitFromPrompt(async (isCurrent) => {
-      const startAhead = startInFlight.current
+      const startAhead = changeInFlight.current
       const result = await onResolveWatch(query)
       if (!isCurrent()) return
 
@@ -204,9 +223,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     }
 
     if (input === "x") {
-      if (info) {
-        handleStop()
-      }
+      requestStop()
     }
 
     if (input === "t") {
