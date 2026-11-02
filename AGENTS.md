@@ -40,6 +40,14 @@ fills, latte blocks writing stderr, and later keys arrive late in one chunk. Tcl
 `sleep` in `expect` does not read. A bare Bun script that writes 2 KB to stderr
 per key shows the same delay under `sleep` and none under a reading wait.
 
+## Exit codes in tests
+
+`fail` in `src/utils/exit.ts` sets `process.exitCode = 1`, and `bun test` exits
+with that code even when every test passes. A test that runs a failing command
+must reset the code afterwards. Bun 1.4.4 ignores `process.exitCode = undefined`,
+so restoring an unset code leaves the 1 in place. Restore it with
+`exitCode ?? 0`. Check `echo $?` after `bun test`, not only the pass count.
+
 ## caffeinate assertions
 
 Check a claim about a `caffeinate` flag with `pmset -g assertions` while the
