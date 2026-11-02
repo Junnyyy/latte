@@ -392,7 +392,7 @@ describe("App", () => {
     expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
   })
 
-  test("pressing o twice while a session starts starts it once", async () => {
+  test("pressing o twice while a session starts starts it once and asks to replace it", async () => {
     let finish: (result: TuiResult) => void = () => {}
     let starts = 0
     const onStart = (_spec: StartSpec) => {
@@ -400,7 +400,7 @@ describe("App", () => {
       return new Promise<TuiResult>((resolve) => { finish = resolve })
     }
 
-    const { stdin } = render(
+    const { lastFrame, stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -412,6 +412,7 @@ describe("App", () => {
     await wait()
 
     expect(starts).toBe(1)
+    expect(lastFrame()).toContain("Replace?")
   })
 
   test("a while target that resolves after another start finishes asks to replace it", async () => {
@@ -456,6 +457,44 @@ describe("App", () => {
     stdin.write("y")
     await wait()
     expect(starts).toEqual([{ watch: first, flags: "-is" }, { watch: cursor, flags: "-is" }])
+  })
+
+  test("cancelling a while target that waits on another start starts nothing", async () => {
+    const first = { pid: 1, name: "Slack" }
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+    const onResolveWatch = async (query: string): Promise<WatchResult> =>
+      ({ ok: true, target: query === "s" ? first : cursor })
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("w")
+    await wait()
+    stdin.write("s")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    finishStart({ ok: true, info: { ...activeInfo, watching: first } })
+    await wait()
+
+    expect(lastFrame()).not.toContain("Replace?")
+    expect(starts).toEqual([{ watch: first, flags: "-is" }])
   })
 
   test("a duration entered while a session starts asks to replace it", async () => {

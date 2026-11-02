@@ -40,9 +40,16 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   const [pendingStart, setPendingStart] = useState<PendingStart>({})
   const [promptError, setPromptError] = useState<string | null>(null)
   const activeWatchSubmit = useRef<symbol | null>(null)
-  const startInFlight = useRef(false)
+  // Start decisions read these instead of `info`, which lags until the next render.
+  const liveInfo = useRef(initialInfo)
+  const startInFlight = useRef<Promise<void> | null>(null)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
+
+  const showInfo = useCallback((next: CaffeinateInfo | null) => {
+    liveInfo.current = next
+    setInfo(next)
+  }, [])
 
   // Tick elapsed every second, re-detect process liveness
   useEffect(() => {
@@ -51,16 +58,16 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     const interval = setInterval(async () => {
       const current = await onDetect()
       if (!current) {
-        setInfo(null)
+        showInfo(null)
         setElapsed(0)
       } else {
-        setInfo(current)
+        showInfo(current)
         const secs = Math.floor((Date.now() - current.startTime.getTime()) / 1000)
         setElapsed(secs)
       }
     }, 1000)
     return () => clearInterval(interval)
-  }, [info, onDetect])
+  }, [info, onDetect, showInfo])
 
   // Initialize elapsed on mount / info change
   useEffect(() => {
@@ -71,30 +78,41 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     }
   }, [info])
 
-  const handleStart = useCallback(async (start: PendingStart = {}) => {
-    if (startInFlight.current) return
-    startInFlight.current = true
-    try {
-      const result = await onStart({ ...start, flags: flagSetToString(sessionFlags) })
-      if (result.ok) {
-        setInfo(result.info)
-        setMode("idle")
-      } else {
-        setErrorMessage(result.error)
+  const handleStart = useCallback((start: PendingStart = {}) => {
+    startInFlight.current ??= (async () => {
+      try {
+        const result = await onStart({ ...start, flags: flagSetToString(sessionFlags) })
+        if (result.ok) {
+          showInfo(result.info)
+          setMode("idle")
+        } else {
+          setErrorMessage(result.error)
+          setMode("error")
+        }
+      } catch (e: unknown) {
+        setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
         setMode("error")
       }
-    } catch (e: unknown) {
-      setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
-      setMode("error")
-    } finally {
-      startInFlight.current = false
+    })().finally(() => {
+      startInFlight.current = null
+    })
+    return startInFlight.current
+  }, [onStart, sessionFlags, showInfo])
+
+  const requestStart = useCallback(async (start: PendingStart) => {
+    await startInFlight.current
+    if (liveInfo.current) {
+      setPendingStart(start)
+      setMode("confirm")
+    } else {
+      await handleStart(start)
     }
-  }, [onStart, sessionFlags])
+  }, [handleStart])
 
   const handleStop = useCallback(async () => {
     try {
       const result = await onStop()
-      setInfo(null)
+      showInfo(null)
       setMode("idle")
       if (!result.ok) {
         // Process was already gone — not a real error for the user
@@ -103,7 +121,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
       setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
       setMode("error")
     }
-  }, [onStop])
+  }, [onStop, showInfo])
 
   const handleDurationSubmit = useCallback((value: string) => {
     const result = Effect.runSyncExit(parseDuration(value))
@@ -114,14 +132,8 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
 
     const seconds = result.value
     setPromptError(null)
-
-    if (info) {
-      setPendingStart({ duration: seconds })
-      setMode("confirm")
-    } else {
-      handleStart({ duration: seconds })
-    }
-  }, [info, handleStart])
+    requestStart({ duration: seconds })
+  }, [requestStart])
 
   const handleWatchSubmit = useCallback(async (query: string) => {
     if (activeWatchSubmit.current !== null) return
@@ -129,6 +141,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     activeWatchSubmit.current = submit
     try {
       const result = await onResolveWatch(query)
+      await startInFlight.current
       if (activeWatchSubmit.current !== submit) return
 
       if (!result.ok) {
@@ -136,17 +149,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
         return
       }
       setPromptError(null)
-
-      if (info) {
-        setPendingStart({ watch: result.target })
-        setMode("confirm")
-      } else {
-        await handleStart({ watch: result.target })
-      }
+      await requestStart({ watch: result.target })
     } finally {
       if (activeWatchSubmit.current === submit) activeWatchSubmit.current = null
     }
-  }, [info, onResolveWatch, handleStart])
+  }, [onResolveWatch, requestStart])
 
   // Flag picker handlers
   const handleFlagToggle = useCallback((flag: Flag) => {
@@ -183,12 +190,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     }
 
     if (input === "o") {
-      if (info) {
-        setPendingStart({})
-        setMode("confirm")
-      } else {
-        handleStart()
-      }
+      requestStart({})
     }
 
     if (input === "x") {
