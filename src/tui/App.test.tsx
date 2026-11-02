@@ -530,6 +530,110 @@ describe("App", () => {
     expect(starts).toEqual([{ flags: "-is" }, { duration: 1800, flags: "-is" }])
   })
 
+  test("cancelling a duration that waits on another start starts nothing", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("t")
+    await wait()
+    for (const char of "30m") {
+      stdin.write(char)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    finishStart({ ok: true, info: activeInfo })
+    await wait()
+
+    expect(lastFrame()).not.toContain("Replace?")
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
+  test("a second enter on a duration while it starts does not ask to replace it", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("t")
+    await wait()
+    for (const char of "30m") {
+      stdin.write(char)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    finishStart({ ok: true, info: timedInfo })
+    await wait()
+
+    expect(lastFrame()).not.toContain("Replace?")
+    expect(starts).toEqual([{ duration: 1800, flags: "-is" }])
+  })
+
+  test("a start that waited on a failed start shows the failure and starts nothing", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("o")
+    await wait()
+    finishStart({ ok: false, error: "Failed to start: boom" })
+    await wait()
+
+    expect(lastFrame()).toContain("Failed to start: boom")
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
+  test("a while target that is not running shows why while another start runs", async () => {
+    const onStart = (_spec: StartSpec) => new Promise<TuiResult>(() => {})
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("w")
+    await wait()
+    for (const char of "zed") {
+      stdin.write(char)
+      await wait()
+    }
+    stdin.write("\r")
+    await wait()
+
+    expect(lastFrame()).toContain("zed isn't running.")
+  })
+
   test("waiting for an app during a session replaces it after confirm", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {
