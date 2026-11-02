@@ -39,10 +39,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pendingStart, setPendingStart] = useState<PendingStart>({})
   const [promptError, setPromptError] = useState<string | null>(null)
-  const activeWatchSubmit = useRef<symbol | null>(null)
-  // Start decisions read these instead of `info`, which lags until the next render.
+  const activePromptSubmit = useRef<symbol | null>(null)
+  // Start decisions read this instead of `info`, which lags until the next render.
   const liveInfo = useRef(initialInfo)
-  const startInFlight = useRef<Promise<void> | null>(null)
+  // Resolves to whether the start succeeded.
+  const startInFlight = useRef<Promise<boolean> | null>(null)
   const [sessionFlags, setSessionFlags] = useState<Set<Flag>>(() => initialFlagSet())
   const [pickerFlags, setPickerFlags] = useState<Set<Flag>>(new Set())
 
@@ -78,7 +79,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     }
   }, [info])
 
-  const handleStart = useCallback((start: PendingStart = {}) => {
+  const handleStart = useCallback((start: PendingStart) => {
     startInFlight.current ??= (async () => {
       try {
         const result = await onStart({ ...start, flags: flagSetToString(sessionFlags) })
@@ -89,9 +90,11 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
           setErrorMessage(result.error)
           setMode("error")
         }
+        return result.ok
       } catch (e: unknown) {
         setErrorMessage(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`)
         setMode("error")
+        return false
       }
     })().finally(() => {
       startInFlight.current = null
@@ -99,8 +102,9 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
     return startInFlight.current
   }, [onStart, sessionFlags, showInfo])
 
-  const requestStart = useCallback(async (start: PendingStart) => {
-    await startInFlight.current
+  const requestStart = useCallback(async (start: PendingStart, isCurrent: () => boolean = () => true) => {
+    if (startInFlight.current && !(await startInFlight.current)) return
+    if (!isCurrent()) return
     if (liveInfo.current) {
       setPendingStart(start)
       setMode("confirm")
@@ -108,6 +112,17 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
       await handleStart(start)
     }
   }, [handleStart])
+
+  const submitFromPrompt = useCallback(async (submitStart: (isCurrent: () => boolean) => Promise<void>) => {
+    if (activePromptSubmit.current !== null) return
+    const submit = Symbol()
+    activePromptSubmit.current = submit
+    try {
+      await submitStart(() => activePromptSubmit.current === submit)
+    } finally {
+      if (activePromptSubmit.current === submit) activePromptSubmit.current = null
+    }
+  }, [])
 
   const handleStop = useCallback(async () => {
     try {
@@ -132,28 +147,21 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
 
     const seconds = result.value
     setPromptError(null)
-    requestStart({ duration: seconds })
-  }, [requestStart])
+    submitFromPrompt((isCurrent) => requestStart({ duration: seconds }, isCurrent))
+  }, [requestStart, submitFromPrompt])
 
-  const handleWatchSubmit = useCallback(async (query: string) => {
-    if (activeWatchSubmit.current !== null) return
-    const submit = Symbol(query)
-    activeWatchSubmit.current = submit
-    try {
+  const handleWatchSubmit = useCallback((query: string) =>
+    submitFromPrompt(async (isCurrent) => {
       const result = await onResolveWatch(query)
-      await startInFlight.current
-      if (activeWatchSubmit.current !== submit) return
+      if (!isCurrent()) return
 
       if (!result.ok) {
         setPromptError(result.error)
         return
       }
       setPromptError(null)
-      await requestStart({ watch: result.target })
-    } finally {
-      if (activeWatchSubmit.current === submit) activeWatchSubmit.current = null
-    }
-  }, [onResolveWatch, requestStart])
+      await requestStart({ watch: result.target }, isCurrent)
+    }), [onResolveWatch, requestStart, submitFromPrompt])
 
   // Flag picker handlers
   const handleFlagToggle = useCallback((flag: Flag) => {
@@ -229,7 +237,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   }, [])
 
   const handlePromptCancel = useCallback(() => {
-    activeWatchSubmit.current = null
+    activePromptSubmit.current = null
     setPromptError(null)
     setMode("idle")
   }, [])
