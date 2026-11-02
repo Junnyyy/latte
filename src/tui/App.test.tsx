@@ -722,6 +722,29 @@ describe("App", () => {
     expect(starts).toEqual([{ flags: "-is" }])
   })
 
+  test("a status check during a replace does not hide the new session", async () => {
+    const detects: ((info: CaffeinateInfo | null) => void)[] = []
+    const onDetect = () => new Promise<CaffeinateInfo | null>((resolve) => { detects.push(resolve) })
+    const replaced: CaffeinateInfo = { ...activeInfo, pid: 43, watching: cursor }
+    let finishStart: (result: TuiResult) => void = () => {}
+    const onStart = (_spec: StartSpec) => new Promise<TuiResult>((resolve) => { finishStart = resolve })
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={onDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("y")
+    await wait(1100)
+    finishStart({ ok: true, info: replaced })
+    await wait()
+    for (const resolve of detects) resolve(null)
+    await wait()
+
+    expect(lastFrame()).toContain("Until Cursor exits")
+  })
+
   test("a status check that started before a stop does not bring the session back", async () => {
     const detects: ((info: CaffeinateInfo | null) => void)[] = []
     const onDetect = () => new Promise<CaffeinateInfo | null>((resolve) => { detects.push(resolve) })
