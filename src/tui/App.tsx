@@ -171,7 +171,7 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
 
   const handleWatchSubmit = useCallback((query: string) =>
     submitFromPrompt(async (isCurrent) => {
-      const startAhead = startInFlight.current
+      const startAhead = changeInFlight.current
       const result = await onResolveWatch(query)
       if (!isCurrent()) return
 
