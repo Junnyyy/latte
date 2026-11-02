@@ -70,7 +70,8 @@ const runStart = async (effect: Effect.Effect<void, never, CaffeinateService>, r
   } finally {
     log.mockRestore()
     error.mockRestore()
-    process.exitCode = exitCode
+    // Bun ignores `process.exitCode = undefined`, so an unset code restores as 0.
+    process.exitCode = exitCode ?? 0
   }
 }
 
