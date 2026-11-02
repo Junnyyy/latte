@@ -644,6 +644,37 @@ describe("App", () => {
     expect(starts).toEqual([{ flags: "-is" }])
   })
 
+  test("a while target that resolves after the start ahead of it fails starts nothing", async () => {
+    let finishResolve: (result: WatchResult) => void = () => {}
+    const onResolveWatch = (_query: string) => new Promise<WatchResult>((resolve) => { finishResolve = resolve })
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("w")
+    await wait()
+    stdin.write("c")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    finishStart({ ok: false, error: "Failed to start: boom" })
+    await wait()
+    finishResolve({ ok: true, target: cursor })
+    await wait()
+
+    expect(lastFrame()).toContain("Failed to start: boom")
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
   test("a while target that is not running shows why while another start runs", async () => {
     const onStart = (_spec: StartSpec) => new Promise<TuiResult>(() => {})
 
