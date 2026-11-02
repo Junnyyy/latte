@@ -40,6 +40,12 @@ fills, latte blocks writing stderr, and later keys arrive late in one chunk. Tcl
 `sleep` in `expect` does not read. A bare Bun script that writes 2 KB to stderr
 per key shows the same delay under `sleep` and none under a reading wait.
 
+A TUI start runs `pkill`, then spawns `caffeinate`, and takes well under a second.
+To drive a key sent while a start is in flight, put a `pkill` shim first on `PATH`
+for the `pty` drive. The shim sleeps 3 seconds, then runs `/usr/bin/pkill "$@"`.
+latte runs `ps`, `pgrep`, and `pkill` by bare name, so the shim takes effect.
+Have the shim log each call, to prove the drive used it.
+
 ## Exit codes in tests
 
 `fail` in `src/utils/exit.ts` sets `process.exitCode = 1`, and `bun test` exits
