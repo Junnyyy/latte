@@ -32,8 +32,21 @@ export const flagSetToString = (flags: ReadonlySet<Flag>): string => {
   return sorted.length > 0 ? `-${sorted.join("")}` : ""
 }
 
-const sameFlags = (a: ReadonlySet<Flag>, b: ReadonlySet<Flag>): boolean =>
+/** e.g. "-is" or "si" → Set(["i", "s"]). Returns null when a letter is not a flag. */
+export const parseFlagString = (flagString: string): Set<Flag> | null => {
+  const letters = [...flagString.replace(/^-/, "")]
+  return letters.every(isFlag) ? new Set(letters) : null
+}
+
+export const sameFlags = (a: ReadonlySet<Flag>, b: ReadonlySet<Flag>): boolean =>
   a.size === b.size && [...a].every((f) => b.has(f))
+
+export const toggleFlag = (flags: ReadonlySet<Flag>, flag: Flag): Set<Flag> => {
+  const next = new Set(flags)
+  if (next.has(flag)) next.delete(flag)
+  else next.add(flag)
+  return next
+}
 
 /**
  * Describe a caffeinate flag string such as "-is" for people.
@@ -42,10 +55,9 @@ const sameFlags = (a: ReadonlySet<Flag>, b: ReadonlySet<Flag>): boolean =>
  * A string with an unknown letter is returned unchanged.
  */
 export const describeFlags = (flagString: string): string => {
-  const letters = flagString.replace(/^-/, "").split("")
-  if (!letters.every(isFlag)) return flagString
+  const flags = parseFlagString(flagString)
+  if (!flags) return flagString
 
-  const flags = new Set(letters)
   const preset = Object.values(PRESETS).find((p) => sameFlags(p.flags, flags))
   if (preset) return preset.summary
   if (flags.size === 0) return "no flags"
