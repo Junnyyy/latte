@@ -46,6 +46,19 @@ for the `pty` drive. The shim sleeps 3 seconds, then runs `/usr/bin/pkill "$@"`.
 latte runs `ps`, `pgrep`, and `pkill` by bare name, so the shim takes effect.
 Have the shim log each call, to prove the drive used it.
 
+A TUI restart takes 140 to 148 ms, measured over 8 kill-and-start cycles through
+`CaffeinateService`. The fixed 100 ms pause in `start()` is most of it. That is
+fast enough for the dashboard to restart `caffeinate` on a settings key with no
+progress indicator.
+
+ink-testing-library frames carry no ANSI codes under `bun test`, so a unit test
+cannot see color or dim text. Check styling in the PTY drive's
+`transcript.raw`, where a dimmed `[x]` reads `\e[2m[x]`.
+
+`caffeinate-before.txt` and `caffeinate-after.txt` right-align the PID, so most
+lines start with a space. Match `^ *[0-9]+`, not `^[0-9]+`, or every line is
+skipped and the check fails while latte is correct.
+
 ## Exit codes in tests
 
 `fail` in `src/utils/exit.ts` sets `process.exitCode = 1`, and `bun test` exits
@@ -53,6 +66,8 @@ with that code even when every test passes. A test that runs a failing command
 must reset the code afterwards. Bun 1.4.4 ignores `process.exitCode = undefined`,
 so restoring an unset code leaves the 1 in place. Restore it with
 `exitCode ?? 0`. Check `echo $?` after `bun test`, not only the pass count.
+Run `bun test` without a pipe when you read the code. In zsh, `$PIPESTATUS` is
+empty, and `$?` after a pipe is the last command's code.
 
 ## caffeinate assertions
 
