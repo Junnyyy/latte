@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { describeFlags } from "./flags.ts"
+import { describeFlags, parseFlagString, toggleFlag, type Flag } from "./flags.ts"
 
 describe("describeFlags", () => {
   test("describes the awake preset in any order", () => {
@@ -32,5 +32,26 @@ describe("describeFlags", () => {
   test("returns raw flags for unknown flags", () => {
     expect(describeFlags("-xyz")).toBe("-xyz")
     expect(describeFlags("-iz")).toBe("-iz")
+  })
+})
+
+describe("parseFlagString", () => {
+  test("reads letters with or without a leading dash", () => {
+    expect(parseFlagString("-dis")).toEqual(new Set<Flag>(["d", "i", "s"]))
+    expect(parseFlagString("si")).toEqual(new Set<Flag>(["i", "s"]))
+    expect(parseFlagString("")).toEqual(new Set<Flag>())
+  })
+
+  test("returns null for a string with an unknown letter", () => {
+    expect(parseFlagString("-iz")).toBeNull()
+  })
+})
+
+describe("toggleFlag", () => {
+  test("adds a missing flag and removes a present one without changing the input", () => {
+    const flags = new Set<Flag>(["i", "s"])
+    expect(toggleFlag(flags, "d")).toEqual(new Set<Flag>(["d", "i", "s"]))
+    expect(toggleFlag(flags, "s")).toEqual(new Set<Flag>(["i"]))
+    expect(flags).toEqual(new Set<Flag>(["i", "s"]))
   })
 })

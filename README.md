@@ -145,9 +145,13 @@ In a terminal, `latte` with no arguments opens a live dashboard. It updates ever
 - **x** turns latte off.
 - **t** starts a timed session. The dashboard asks for a duration.
 - **w** starts a session that lasts until an app or PID exits, like `--while`. The dashboard asks for the name. If the app isn't running, the error shows under the input and the running session stays.
-- **s** toggles whether the screen stays on. The choice applies to the next **o**, **t**, or **w**. It does not change a running session. Until you restart, the dashboard shows a `Next start:` line.
+- **s** toggles whether the screen stays on. If a session runs, latte restarts `caffeinate` with the new setting at once. The session keeps its time left and the app it waits for, and **Running for** starts again from 0.
 - **f** opens the advanced flag picker. See [Advanced: exact flags](#advanced-exact-flags).
 - **q** quits the dashboard. `caffeinate` keeps running.
+
+If a session runs, **o**, **t**, and **w** replace it without asking. **o** does nothing when the running session already has no time limit, waits for no app, and uses the same flags.
+
+When the dashboard opens on a running session, the screen toggle and the flag picker start from that session's flags.
 
 When the output is not a terminal, `latte` prints `latte status` instead.
 
@@ -160,7 +164,7 @@ If `caffeinate` is already running, `latte on` and `latte <duration>` show the r
 Kill existing and start 30m timer? (y/n)
 ```
 
-The dashboard shows the same question as a dialog.
+The dashboard does not ask. The running session is already on screen, so a start from the dashboard replaces it.
 
 ## Advanced: exact flags
 
@@ -189,7 +193,7 @@ To add flags to every preset session, set `LATTE_FLAGS` in your shell profile. F
 echo 'export LATTE_FLAGS="-d"' >> ~/.zshrc
 ```
 
-In the dashboard, press **f** to toggle single letters, **r** to reset to the preset, **Enter** to keep the changes, and **Esc** to discard them.
+In the dashboard, press **f** to toggle single letters, **r** to reset to the preset, **Enter** to apply the changes, and **Esc** to discard them. Like **s**, **Enter** restarts a running session with the new flags at once.
 
 ## How it works
 

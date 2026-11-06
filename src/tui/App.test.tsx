@@ -29,6 +29,24 @@ const unresolved = async (query: string): Promise<WatchResult> => ({ ok: false, 
 const cursor = { pid: 123, name: "Cursor" }
 const resolvesCursor = async (_query: string): Promise<WatchResult> => ({ ok: true, target: cursor })
 
+const recordStarts = () => {
+  const starts: StartSpec[] = []
+  const onStart = async (spec: StartSpec): Promise<TuiResult> => {
+    starts.push(spec)
+    return { ok: true, info: startedWith(spec) }
+  }
+  return { starts, onStart }
+}
+
+const startedWith = (spec: StartSpec): CaffeinateInfo => ({
+  pid: 42,
+  flags: spec.flags,
+  startTime: new Date(),
+  duration: spec.duration ?? null,
+  remaining: spec.duration ?? null,
+  watching: spec.watch ?? null,
+})
+
 const originalEnv = process.env.LATTE_FLAGS
 beforeEach(() => {
   delete process.env.LATTE_FLAGS
@@ -108,18 +126,29 @@ describe("App", () => {
     expect(startCalled).toBe(true)
   })
 
-  test("pressing o on active state shows confirm dialog", async () => {
-    const { lastFrame, stdin } = render(
-      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
+  test("pressing o on an indefinite session with the same flags does nothing", async () => {
+    const { starts, onStart } = recordStarts()
+    const { stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
     )
 
     stdin.write("o")
     await wait()
 
-    const frame = lastFrame()
-    expect(frame).toContain("Replace")
-    expect(frame).toContain("[y]")
-    expect(frame).toContain("[n]")
+    expect(starts).toEqual([])
+  })
+
+  test("pressing o on a timed session replaces it with an indefinite one at once", async () => {
+    const { starts, onStart } = recordStarts()
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={timedInfo} onStart={onStart} onStop={noop} onDetect={async () => timedInfo} />,
+    )
+
+    stdin.write("o")
+    await wait()
+
+    expect(starts).toEqual([{ flags: "-is" }])
+    expect(lastFrame()).toContain("Duration: indefinite")
   })
 
   test("pressing x on active state stops caffeinate", async () => {
@@ -139,6 +168,31 @@ describe("App", () => {
     expect(stopCalled).toBe(true)
   })
 
+  test("pressing x while a session starts stops it once it has started", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const onStart = (_spec: StartSpec) => new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    let stops = 0
+    const onStop = async (): Promise<TuiResult> => {
+      stops++
+      return { ok: true, info: null }
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={onStop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    stdin.write("x")
+    await wait()
+    expect(stops).toBe(0)
+
+    finishStart({ ok: true, info: activeInfo })
+    await wait()
+    expect(stops).toBe(1)
+    expect(lastFrame()).toContain("Inactive")
+  })
+
   test("pressing t shows duration input", async () => {
     const { lastFrame, stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
@@ -149,6 +203,7 @@ describe("App", () => {
 
     const frame = lastFrame()
     expect(frame).toContain("Duration:")
+    expect(frame).toContain("e.g. 30m, 2h, 90s")
     expect(frame).toContain("[enter]")
     expect(frame).toContain("[esc]")
   })
@@ -174,14 +229,14 @@ describe("App", () => {
     expect(lastFrame()).not.toContain("not a valid duration")
   })
 
-  test("a duration entered during a session starts after the replace confirm", async () => {
+  test("a duration entered during a session replaces it at once", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {
       starts.push(spec)
       return { ok: true, info: timedInfo }
     }
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
     )
 
@@ -192,11 +247,6 @@ describe("App", () => {
       await wait()
     }
     stdin.write("\r")
-    await wait()
-    expect(lastFrame()).toContain("Replace?")
-    expect(starts).toEqual([])
-
-    stdin.write("y")
     await wait()
     expect(starts).toEqual([{ duration: 90, flags: "-is" }])
   })
@@ -392,7 +442,7 @@ describe("App", () => {
     expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
   })
 
-  test("pressing o twice while a session starts starts it once and asks to replace it", async () => {
+  test("pressing o twice while a session starts starts it once", async () => {
     let finish: (result: TuiResult) => void = () => {}
     let starts = 0
     const onStart = (_spec: StartSpec) => {
@@ -400,7 +450,7 @@ describe("App", () => {
       return new Promise<TuiResult>((resolve) => { finish = resolve })
     }
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -412,10 +462,9 @@ describe("App", () => {
     await wait()
 
     expect(starts).toBe(1)
-    expect(lastFrame()).toContain("Replace?")
   })
 
-  test("a while target that resolves after another start finishes asks to replace it", async () => {
+  test("a while target that resolves after another start finishes replaces it", async () => {
     const first = { pid: 1, name: "Slack" }
     const resolves: ((result: WatchResult) => void)[] = []
     const onResolveWatch = (_query: string) => new Promise<WatchResult>((resolve) => { resolves.push(resolve) })
@@ -426,7 +475,7 @@ describe("App", () => {
       return new Promise<TuiResult>((resolve) => { finishStart = resolve })
     }
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -448,13 +497,9 @@ describe("App", () => {
     await wait()
     finishStart({ ok: true, info: { ...activeInfo, watching: first } })
     await wait()
-    resolves[1]!({ ok: true, target: cursor })
-    await wait()
-
-    expect(lastFrame()).toContain("Replace?")
     expect(starts).toEqual([{ watch: first, flags: "-is" }])
 
-    stdin.write("y")
+    resolves[1]!({ ok: true, target: cursor })
     await wait()
     expect(starts).toEqual([{ watch: first, flags: "-is" }, { watch: cursor, flags: "-is" }])
   })
@@ -470,7 +515,7 @@ describe("App", () => {
     const onResolveWatch = async (query: string): Promise<WatchResult> =>
       ({ ok: true, target: query === "s" ? first : cursor })
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={onResolveWatch} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -493,11 +538,10 @@ describe("App", () => {
     finishStart({ ok: true, info: { ...activeInfo, watching: first } })
     await wait()
 
-    expect(lastFrame()).not.toContain("Replace?")
     expect(starts).toEqual([{ watch: first, flags: "-is" }])
   })
 
-  test("a duration entered while a session starts asks to replace it", async () => {
+  test("a duration entered while a session starts replaces it after that start", async () => {
     let finishStart: (result: TuiResult) => void = () => {}
     const starts: StartSpec[] = []
     const onStart = (spec: StartSpec) => {
@@ -505,7 +549,7 @@ describe("App", () => {
       return new Promise<TuiResult>((resolve) => { finishStart = resolve })
     }
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -519,13 +563,9 @@ describe("App", () => {
     }
     stdin.write("\r")
     await wait()
-    finishStart({ ok: true, info: activeInfo })
-    await wait()
-
-    expect(lastFrame()).toContain("Replace?")
     expect(starts).toEqual([{ flags: "-is" }])
 
-    stdin.write("y")
+    finishStart({ ok: true, info: activeInfo })
     await wait()
     expect(starts).toEqual([{ flags: "-is" }, { duration: 1800, flags: "-is" }])
   })
@@ -538,7 +578,7 @@ describe("App", () => {
       return new Promise<TuiResult>((resolve) => { finishStart = resolve })
     }
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -557,7 +597,6 @@ describe("App", () => {
     finishStart({ ok: true, info: activeInfo })
     await wait()
 
-    expect(lastFrame()).not.toContain("Replace?")
     expect(starts).toEqual([{ flags: "-is" }])
   })
 
@@ -592,7 +631,7 @@ describe("App", () => {
     expect(starts).toEqual([{ flags: "-is" }])
   })
 
-  test("a second enter on a duration while it starts does not ask to replace it", async () => {
+  test("a second enter on a duration while it starts does not start it twice", async () => {
     let finishStart: (result: TuiResult) => void = () => {}
     const starts: StartSpec[] = []
     const onStart = (spec: StartSpec) => {
@@ -600,7 +639,7 @@ describe("App", () => {
       return new Promise<TuiResult>((resolve) => { finishStart = resolve })
     }
 
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
 
@@ -617,7 +656,6 @@ describe("App", () => {
     finishStart({ ok: true, info: timedInfo })
     await wait()
 
-    expect(lastFrame()).not.toContain("Replace?")
     expect(starts).toEqual([{ duration: 1800, flags: "-is" }])
   })
 
@@ -642,6 +680,23 @@ describe("App", () => {
 
     expect(lastFrame()).toContain("Failed to start: boom")
     expect(starts).toEqual([{ flags: "-is" }])
+  })
+
+  test("a failed start shows inline, and the next key clears it and does its action", async () => {
+    const onStart = async (_spec: StartSpec): Promise<TuiResult> => ({ ok: false, error: "Failed to start: boom" })
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
+    )
+
+    stdin.write("o")
+    await wait()
+    expect(lastFrame()).toContain("Failed to start: boom")
+
+    stdin.write("t")
+    await wait()
+    expect(lastFrame()).not.toContain("Failed to start")
+    expect(lastFrame()).toContain("Duration:")
   })
 
   test("a while target that resolves after the start ahead of it fails starts nothing", async () => {
@@ -694,9 +749,10 @@ describe("App", () => {
     await wait()
 
     expect(lastFrame()).toContain("zed isn't running.")
+    expect(lastFrame()).toContain("Stay awake while: zed")
   })
 
-  test("waiting for an app during a session replaces it after confirm", async () => {
+  test("waiting for an app during a session replaces it at once", async () => {
     const starts: StartSpec[] = []
     const onStart = async (spec: StartSpec): Promise<TuiResult> => {
       starts.push(spec)
@@ -713,29 +769,8 @@ describe("App", () => {
     await wait()
     stdin.write("\r")
     await wait()
-    expect(lastFrame()).toContain("Replace?")
-    expect(starts).toEqual([])
-
-    stdin.write("y")
-    await wait()
     expect(starts).toEqual([{ watch: cursor, flags: "-is" }])
-  })
-
-  test("cancelling confirm dialog returns to list", async () => {
-    const { lastFrame, stdin } = render(
-      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
-    )
-
-    stdin.write("o")
-    await wait()
-    expect(lastFrame()).toContain("Replace")
-
-    stdin.write("n")
-    await wait()
-
-    const frame = lastFrame()
-    expect(frame).not.toContain("Replace")
-    expect(frame).toContain("Active")
+    expect(lastFrame()).toContain("Until Cursor exits (PID 123)")
   })
 
   test("shows the screen toggle off and the advanced picker in the action bar", () => {
@@ -776,29 +811,144 @@ describe("App", () => {
     expect(lastFrame()).toContain("Mac and screen stay awake")
   })
 
-  test("pressing s during a session says the change applies to the next start", async () => {
+  test("pressing s during a session restarts it with the screen on, and s again turns it off", async () => {
+    const { starts, onStart } = recordStarts()
     const { lastFrame, stdin } = render(
-      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={noop} onStop={noop} onDetect={async () => activeInfo} />,
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
     )
-    expect(lastFrame()).not.toContain("Next start")
 
     stdin.write("s")
     await wait()
-    expect(lastFrame()).toContain("Next start: Mac and screen stay awake. Press o, t, or w to apply.")
+    expect(starts).toEqual([{ flags: "-dis" }])
+    expect(lastFrame()).toContain("Mac and screen stay awake")
 
     stdin.write("s")
     await wait()
-    expect(lastFrame()).not.toContain("Next start")
+    expect(starts).toEqual([{ flags: "-dis" }, { flags: "-is" }])
+    expect(lastFrame()).toContain("Mac stays awake, screen can sleep")
   })
 
-  test("pressing s with no session shows no next-start line", async () => {
+  test("pressing s with no session starts nothing", async () => {
+    const { starts, onStart } = recordStarts()
     const { lastFrame, stdin } = render(
-      <App onResolveWatch={unresolved} initialInfo={null} onStart={noop} onStop={noop} onDetect={noopDetect} />,
+      <App onResolveWatch={unresolved} initialInfo={null} onStart={onStart} onStop={noop} onDetect={noopDetect} />,
     )
     stdin.write("s")
     await wait()
     expect(lastFrame()).toContain("[s] screen ●")
-    expect(lastFrame()).not.toContain("Next start")
+    expect(starts).toEqual([])
+  })
+
+  test("pressing s on a timed session keeps its seconds left", async () => {
+    const { starts, onStart } = recordStarts()
+    const startedAMinuteAgo = { ...timedInfo, startTime: new Date(Date.now() - 60_000) }
+    const { stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={startedAMinuteAgo} onStart={onStart} onStop={noop} onDetect={async () => startedAMinuteAgo} />,
+    )
+
+    stdin.write("s")
+    await wait()
+
+    expect(starts).toHaveLength(1)
+    expect(starts[0]!.flags).toBe("-dis")
+    expect(starts[0]!.duration).toBeGreaterThanOrEqual(1739)
+    expect(starts[0]!.duration).toBeLessThanOrEqual(1740)
+  })
+
+  test("pressing s on a watched session keeps the watched process", async () => {
+    const { starts, onStart } = recordStarts()
+    const watched = { ...activeInfo, watching: cursor }
+    const { stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={watched} onStart={onStart} onStop={noop} onDetect={async () => watched} />,
+    )
+
+    stdin.write("s")
+    await wait()
+
+    expect(starts).toEqual([{ flags: "-dis", watch: cursor }])
+  })
+
+  test("pressing s on a timed session with no time left does not restart it", async () => {
+    const { starts, onStart } = recordStarts()
+    const spent = { ...timedInfo, startTime: new Date(Date.now() - 31 * 60_000) }
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={spent} onStart={onStart} onStop={noop} onDetect={async () => spent} />,
+    )
+
+    stdin.write("s")
+    await wait()
+
+    expect(starts).toEqual([])
+    expect(lastFrame()).toContain("[s] screen ●")
+  })
+
+  test("pressing s on a screen session started elsewhere turns the screen off", async () => {
+    const { starts, onStart } = recordStarts()
+    const screen = { ...activeInfo, flags: "-dis" }
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={screen} onStart={onStart} onStop={noop} onDetect={async () => screen} />,
+    )
+    expect(lastFrame()).toContain("[s] screen ●")
+
+    stdin.write("s")
+    await wait()
+
+    expect(starts).toEqual([{ flags: "-is" }])
+  })
+
+  test("toggles pressed while a restart runs converge on the last setting", async () => {
+    let finishStart: (result: TuiResult) => void = () => {}
+    const starts: StartSpec[] = []
+    const onStart = (spec: StartSpec) => {
+      starts.push(spec)
+      return new Promise<TuiResult>((resolve) => { finishStart = resolve })
+    }
+
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+
+    stdin.write("s")
+    await wait()
+    stdin.write("s")
+    await wait()
+    stdin.write("s")
+    await wait()
+    finishStart({ ok: true, info: startedWith({ flags: "-dis" }) })
+    await wait()
+
+    expect(starts).toEqual([{ flags: "-dis" }])
+    expect(lastFrame()).toContain("Mac and screen stay awake")
+  })
+
+  test("the first frame after a restart shows 0s and the new flags", async () => {
+    const { onStart } = recordStarts()
+    const { frames, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+
+    stdin.write("s")
+    await wait()
+
+    expect(frames.find((frame) => frame.includes("Mac and screen stay awake"))).toContain("Running for 0s")
+  })
+
+  test("a status detect that started before a change does not overwrite it", async () => {
+    const detects: ((info: CaffeinateInfo | null) => void)[] = []
+    const onDetect = () => new Promise<CaffeinateInfo | null>((resolve) => { detects.push(resolve) })
+    const { onStart } = recordStarts()
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={onDetect} />,
+    )
+
+    await wait(1100)
+    expect(detects).toHaveLength(1)
+    stdin.write("s")
+    await wait()
+    detects[0]!(activeInfo)
+    await wait()
+
+    expect(lastFrame()).toContain("Mac and screen stay awake")
   })
 
   test("pressing s twice turns the screen back off", async () => {
@@ -837,6 +987,30 @@ describe("App", () => {
     await wait()
 
     expect(lastFrame()).toContain("[s] screen ●")
+  })
+
+  test("picker enter applies its set to the running session, and esc does not", async () => {
+    const { starts, onStart } = recordStarts()
+    const { lastFrame, stdin } = render(
+      <App onResolveWatch={unresolved} initialInfo={activeInfo} onStart={onStart} onStop={noop} onDetect={async () => activeInfo} />,
+    )
+
+    stdin.write("f")
+    await wait()
+    expect(lastFrame()).toContain("[enter] apply")
+    stdin.write("m")
+    await wait()
+    stdin.write("\u001B")
+    await wait()
+    expect(starts).toEqual([])
+
+    stdin.write("f")
+    await wait()
+    stdin.write("m")
+    await wait()
+    stdin.write("\r")
+    await wait()
+    expect(starts).toEqual([{ flags: "-ims" }])
   })
 
   test("picker reset returns to the awake preset", async () => {

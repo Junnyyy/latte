@@ -1,16 +1,16 @@
 import React from "react"
 import { Box, Text } from "ink"
-import type { CaffeinateInfo } from "../../types/index.ts"
 import { describeFlags } from "../../utils/flags.ts"
 import { formatDuration } from "../../utils/duration.ts"
+import { elapsedSeconds, remainingSeconds } from "../changes.ts"
+import type { Observed } from "../sessionStore.ts"
 
 interface Props {
-  info: CaffeinateInfo | null
-  elapsed: number
+  session: Observed | null
 }
 
-export const StatusDisplay: React.FC<Props> = ({ info, elapsed }) => {
-  if (!info) {
+export const StatusDisplay: React.FC<Props> = ({ session }) => {
+  if (!session) {
     return (
       <Box flexDirection="column">
         <Text dimColor>○ Inactive — no caffeinate running</Text>
@@ -18,9 +18,9 @@ export const StatusDisplay: React.FC<Props> = ({ info, elapsed }) => {
     )
   }
 
-  const remaining = info.duration !== null
-    ? Math.max(0, info.duration - elapsed)
-    : null
+  const { info, at } = session
+  const elapsed = elapsedSeconds(info, at)
+  const remaining = remainingSeconds(info, at)
 
   const remainingColor = remaining !== null
     ? remaining < 60
