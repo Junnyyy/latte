@@ -301,7 +301,7 @@ describe("the status tick", () => {
     expect(store.getSnapshot().session?.info.duration).toBe(90)
   })
 
-  test("issues no detect while a change runs", async () => {
+  test("issues no detect while a change runs, so a restart never shows no session between its kill and spawn", async () => {
     const fake = fakeIO()
     const store = createSessionStore(fake.io, session())
     const stop = store.poll()

@@ -7,7 +7,7 @@ import { planChange, type Apply, type Change, type Plan, type Refused, type Requ
 
 export interface SessionIO {
   start: (spec: StartSpec) => Promise<TuiResult>
-  stop: () => Promise<TuiResult>
+  stop: () => Promise<unknown>
   detect: () => Promise<CaffeinateInfo | null>
   now: () => Date
 }
@@ -46,7 +46,7 @@ export interface SessionStore {
 }
 
 interface Slot {
-  change?: Change | Apply
+  change: Change | Apply | "resolving"
   settle: (outcome: Outcome) => void
 }
 
@@ -61,7 +61,7 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
   const listeners = new Set<() => void>()
   const queue: Slot[] = []
   let running = false
-  let version = 0
+  let sessionVersion = 0
 
   const write = (patch: Partial<Snapshot>) => {
     snapshot = { ...snapshot, ...patch }
@@ -69,7 +69,7 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
   }
 
   const writeSession = (session: Observed | null, error = snapshot.error) => {
-    version++
+    sessionVersion++
     write({ session, error })
   }
 
@@ -101,7 +101,7 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
 
   const run = async (slot: Slot, change: Change | Apply) => {
     running = true
-    version++
+    sessionVersion++
     const plan = planChange(change, { session: snapshot.session?.info ?? null, flags: snapshot.flags, now: io.now() })
     const outcome = await execute(plan).catch((e: unknown): Outcome => {
       const error = unexpected(e)
@@ -118,7 +118,7 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
 
   const pump = () => {
     const head = queue[0]
-    if (running || head?.change === undefined) return
+    if (running || !head || head.change === "resolving") return
     queue.shift()
     void run(head, head.change)
   }
@@ -132,7 +132,7 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
 
   const enqueue = (request: Change | Apply | Refused | Promise<Request>): Ticket => {
     const { promise, resolve } = Promise.withResolvers<Outcome>()
-    const slot: Slot = { settle: resolve }
+    const slot: Slot = { change: "resolving", settle: resolve }
     queue.push(slot)
     Promise.resolve(request).then(
       (resolved) => accept(slot, resolved),
@@ -167,9 +167,9 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
     poll: () => {
       const id = setInterval(() => {
         if (running || snapshot.session === null) return
-        const issued = version
+        const issued = sessionVersion
         void io.detect().then((info) => {
-          if (version === issued) writeSession(info && { info, at: io.now() })
+          if (sessionVersion === issued) writeSession(info && { info, at: io.now() })
         })
       }, 1000)
       return () => clearInterval(id)
