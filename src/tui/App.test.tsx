@@ -29,7 +29,6 @@ const unresolved = async (query: string): Promise<WatchResult> => ({ ok: false, 
 const cursor = { pid: 123, name: "Cursor" }
 const resolvesCursor = async (_query: string): Promise<WatchResult> => ({ ok: true, target: cursor })
 
-/** An onStart that records each spec and reports the session that spec starts. */
 const recordStarts = () => {
   const starts: StartSpec[] = []
   const onStart = async (spec: StartSpec): Promise<TuiResult> => {

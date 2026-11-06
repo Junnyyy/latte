@@ -11,10 +11,8 @@ export type Change =
   | { kind: "while"; target: WatchTarget }
   | { kind: "off" }
 
-/** Bring a running session in line with the current settings. */
 export type Apply = { kind: "apply" }
 
-/** A prompt value that names no change, with the reason to show under the input. */
 export type Refused = { kind: "refused"; reason: string }
 
 export type Request = Change | Refused
@@ -32,7 +30,6 @@ export interface Situation {
 
 const nothing: Plan = { kind: "nothing" }
 
-/** What a change does, decided from the session and settings as they are when it runs, not when it was submitted. */
 export const planChange = (change: Change | Apply, { session, flags, now }: Situation): Plan => {
   const start = (end: Omit<StartSpec, "flags">): Plan =>
     ({ kind: "start", spec: { flags: flagSetToString(flags), ...end } })

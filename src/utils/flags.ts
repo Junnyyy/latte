@@ -32,7 +32,6 @@ export const flagSetToString = (flags: ReadonlySet<Flag>): string => {
   return sorted.length > 0 ? `-${sorted.join("")}` : ""
 }
 
-/** e.g. "-is" or "si" → Set(["i", "s"]). Returns null when a letter is not a flag. */
 export const parseFlagString = (flagString: string): Set<Flag> | null => {
   const letters = [...flagString.replace(/^-/, "")]
   return letters.every(isFlag) ? new Set(letters) : null

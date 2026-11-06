@@ -5,7 +5,6 @@ export interface Action {
   key: string
   label: string
   toggled?: boolean
-  /** Nothing to act on now. The key still works, because a change queued behind a start decides when it runs. */
   dim?: boolean
 }
 

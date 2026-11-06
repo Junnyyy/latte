@@ -45,7 +45,6 @@ export const App: React.FC<Props> = ({ initialInfo, onStart, onStop, onDetect, o
   ]
 
   useInput((input, key) => {
-    // The error line clears on any key, in any mode, and the key still does its own action.
     store.dismissError()
     if (mode !== "idle") return
     if (input === "c" && key.ctrl) return exit()

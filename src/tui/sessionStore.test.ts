@@ -28,7 +28,6 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve))
 const outcomeSoFar = (ticket: Ticket) =>
   Promise.race([ticket.done, flush().then(() => "pending" as const)])
 
-/** Starts and detects wait until the test settles them. */
 const fakeIO = () => {
   const starts: StartSpec[] = []
   const startResults: ((result: TuiResult | Promise<never>) => void)[] = []

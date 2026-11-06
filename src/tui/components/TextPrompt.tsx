@@ -6,7 +6,6 @@ interface Props {
   label: string
   acceptsChar: RegExp
   hint?: string
-  /** Called on enter with the trimmed value. A refusal shows under the input; any other outcome closes the prompt. */
   submit: (value: string) => Ticket
   onClose: () => void
 }
@@ -14,7 +13,6 @@ interface Props {
 export const TextPrompt: React.FC<Props> = ({ label, acceptsChar, hint, submit, onClose }) => {
   const [value, setValue] = useState("")
   const [refusal, setRefusal] = useState<string | null>(null)
-  // A ref, so a second enter in the same input chunk sees the first submit.
   const pending = useRef<Ticket | null>(null)
 
   useInput((input, key) => {
