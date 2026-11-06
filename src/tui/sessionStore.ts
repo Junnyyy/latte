@@ -1,3 +1,4 @@
+import { useEffect, useState, useSyncExternalStore } from "react"
 import type { CaffeinateInfo, TuiResult } from "../types/index.ts"
 import type { StartSpec } from "../services/Caffeinate.ts"
 import { parseFlagString, type Flag } from "../utils/flags.ts"
@@ -186,4 +187,12 @@ export const createSessionStore = (io: SessionIO, initial: CaffeinateInfo | null
       return () => clearInterval(id)
     },
   }
+}
+
+/** Creates the store once, renders on each snapshot, and polls while mounted. */
+export const useSessionStore = (create: () => SessionStore): readonly [SessionStore, Snapshot] => {
+  const [store] = useState(create)
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  useEffect(() => store.poll(), [store])
+  return [store, snapshot]
 }

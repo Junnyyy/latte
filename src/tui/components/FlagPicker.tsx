@@ -1,19 +1,20 @@
-import React from "react"
+import React, { useState } from "react"
 import { Box, Text, useInput } from "ink"
-import { FLAGS, FLAG_DESCRIPTIONS, isFlag, type Flag } from "../../utils/flags.ts"
+import { FLAGS, FLAG_DESCRIPTIONS, isFlag, toggleFlag, type Flag } from "../../utils/flags.ts"
+import { initialFlagSet } from "../../utils/resolveFlags.ts"
 
 interface Props {
-  flags: ReadonlySet<Flag>
-  onToggle: (flag: Flag) => void
-  onConfirm: () => void
+  initial: ReadonlySet<Flag>
+  onApply: (flags: ReadonlySet<Flag>) => void
   onCancel: () => void
-  onReset: () => void
 }
 
-export const FlagPicker: React.FC<Props> = ({ flags, onToggle, onConfirm, onCancel, onReset }) => {
+export const FlagPicker: React.FC<Props> = ({ initial, onApply, onCancel }) => {
+  const [draft, setDraft] = useState(initial)
+
   useInput((input, key) => {
     if (key.return) {
-      onConfirm()
+      onApply(draft)
       return
     }
     if (key.escape) {
@@ -21,11 +22,11 @@ export const FlagPicker: React.FC<Props> = ({ flags, onToggle, onConfirm, onCanc
       return
     }
     if (input === "r") {
-      onReset()
+      setDraft(initialFlagSet())
       return
     }
     if (isFlag(input)) {
-      onToggle(input)
+      setDraft((current) => toggleFlag(current, input))
     }
   })
 
@@ -37,14 +38,14 @@ export const FlagPicker: React.FC<Props> = ({ flags, onToggle, onConfirm, onCanc
           <Box key={f} gap={0}>
             <Text bold color="cyan">[{f}]</Text>
             <Text dimColor> {FLAG_DESCRIPTIONS[f]}</Text>
-            {flags.has(f) ? <Text color="green"> ●</Text> : <Text dimColor> ○</Text>}
+            {draft.has(f) ? <Text color="green"> ●</Text> : <Text dimColor> ○</Text>}
           </Box>
         ))}
       </Box>
       <Box gap={2} marginTop={1}>
         <Box gap={0}>
           <Text bold color="cyan">[enter]</Text>
-          <Text dimColor> done</Text>
+          <Text dimColor> apply</Text>
         </Box>
         <Box gap={0}>
           <Text bold color="cyan">[r]</Text>

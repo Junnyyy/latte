@@ -1,10 +1,12 @@
 import React from "react"
 import { Box, Text } from "ink"
 
-interface Action {
+export interface Action {
   key: string
   label: string
   toggled?: boolean
+  /** Nothing to act on now. The key still works, because a change queued behind a start decides when it runs. */
+  dim?: boolean
 }
 
 interface Props {
@@ -15,7 +17,7 @@ export const ActionBar: React.FC<Props> = ({ actions }) => (
   <Box marginTop={1} gap={2}>
     {actions.map((action) => (
       <Box key={action.key} gap={0}>
-        <Text bold color="cyan">[{action.key}]</Text>
+        <Text bold={!action.dim} color={action.dim ? undefined : "cyan"} dimColor={action.dim}>[{action.key}]</Text>
         <Text dimColor> {action.label}</Text>
         {action.toggled === true && <Text color="green"> ●</Text>}
         {action.toggled === false && <Text dimColor> ○</Text>}

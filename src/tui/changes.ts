@@ -5,7 +5,6 @@ import type { WatchTarget } from "../utils/watch.ts"
 import { flagSetToString, parseFlagString, sameFlags, type Flag } from "../utils/flags.ts"
 import { parseDuration } from "../utils/duration.ts"
 
-/** A session change that a key asks for. */
 export type Change =
   | { kind: "on" }
   | { kind: "timed"; seconds: number }
@@ -33,12 +32,7 @@ export interface Situation {
 
 const nothing: Plan = { kind: "nothing" }
 
-/**
- * What a change does, decided from the session and settings as they are when it runs.
- * `on` does nothing when an indefinite session already has the flags. `timed` and
- * `while` always replace. `apply` restarts a session that differs from the flags,
- * keeping its seconds left and its watched process, unless no time is left.
- */
+/** What a change does, decided from the session and settings as they are when it runs, not when it was submitted. */
 export const planChange = (change: Change | Apply, { session, flags, now }: Situation): Plan => {
   const start = (end: Omit<StartSpec, "flags">): Plan =>
     ({ kind: "start", spec: { flags: flagSetToString(flags), ...end } })
