@@ -38,15 +38,10 @@ echo "Bumping version: ${OLD_VERSION} -> ${NEW_VERSION}"
 sed -i '' "s/\"version\": \"${OLD_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" package.json
 
 # Cross-compile binaries
-echo "Building latte-darwin-arm64..."
-bun build --compile --target=bun-darwin-arm64 ./src/index.ts --outfile latte-darwin-arm64
-
-echo "Building latte-darwin-x64..."
-bun build --compile --target=bun-darwin-x64 ./src/index.ts --outfile latte-darwin-x64
-
-for BINARY in latte-darwin-arm64 latte-darwin-x64; do
-  codesign --force --sign - "$BINARY"
-  codesign --verify --strict "$BINARY"
+for PLATFORM in darwin-arm64 darwin-x64; do
+  BINARY="latte-$PLATFORM"
+  echo "Building $BINARY..."
+  ./scripts/build.sh "$BINARY" "bun-$PLATFORM"
   if ! BUILT_VERSION=$("./$BINARY" --version); then
     echo "Error: $BINARY failed to start. Release aborted." >&2
     exit 1

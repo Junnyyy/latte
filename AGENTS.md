@@ -121,3 +121,14 @@ release script, which updates `package.json` before testing the binaries.
 The installer must verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
 substitute for a successful executable version check.
+
+## React production build
+
+Build latte with `scripts/build.sh`, which defines `NODE_ENV=production` and
+fails if the binary still bundles `react-reconciler.development`. The
+`src/index.ts` shebang sets `NODE_ENV=production` for linked installs.
+
+React's development reconciler calls `performance.measure()` for each component
+on each render, and Bun keeps every entry. The TUI re-renders on its 1 s status
+poll, so a development build grows by about 17 MB per 1,000 polls and reached
+3.58 GB after several days.
