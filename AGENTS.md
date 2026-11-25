@@ -124,19 +124,23 @@ substitute for a successful executable version check.
 
 ## React production build
 
-Every `bun build` of latte passes
-`--define 'process.env.NODE_ENV="production"'`. Without it, latte bundles
-React's development build, which records 30 `performance.measure()` entries
-per dashboard render. Bun keeps every entry. While a session runs, the
-dashboard polls and renders once a second, so memory grows by about 1 GB a
-day. A v0.4.0 dashboard reached a 5.2 GB footprint after 5 days. With no
-session, the dashboard does not poll and memory stays flat.
+Build latte only through `scripts/build.sh <outfile> [bun-target]`.
+`bun run build`, `scripts/install.sh compile`, and `scripts/release.sh` all
+call it. The script passes `--define 'process.env.NODE_ENV="production"'`,
+refuses a binary that contains `react-reconciler.development` or lacks
+`react-reconciler.production`, and then signs the binary.
 
-`scripts/release.sh` refuses a binary that contains
-`react-reconciler.development` or lacks `react-reconciler.production`. The
-other build commands have no such check. To check a local build, run
-`grep -ac 'react-reconciler.development' latte`, which prints 0 for a
-production build.
+Without the define, latte bundles React's development build, which records 30
+`performance.measure()` entries per dashboard render. Bun keeps every entry.
+While a session runs, the dashboard polls and renders once a second, so memory
+grows by about 1 GB a day. A v0.4.0 dashboard reached a 5.2 GB footprint after
+5 days. With no session, the dashboard does not poll and memory stays flat.
+
+Builds are byte-for-byte deterministic, so compare SHA-256 hashes to prove
+that a build change does not change the binary. The binary embeds
+`package.json`, including its `scripts` block. An edit to `package.json`
+changes the hash even when the code is the same. In that case, compare
+`strings -n 8` output of the old and new binaries.
 
 The `src/index.ts` shebang sets `NODE_ENV=production` for linked installs. It
 overrides any `NODE_ENV` the caller sets, and the processes latte starts
