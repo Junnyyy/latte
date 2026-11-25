@@ -39,10 +39,10 @@ sed -i '' "s/\"version\": \"${OLD_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" p
 
 # Cross-compile binaries
 echo "Building latte-darwin-arm64..."
-bun build --compile --target=bun-darwin-arm64 ./src/index.ts --outfile latte-darwin-arm64
+bun build --compile --target=bun-darwin-arm64 --define 'process.env.NODE_ENV="production"' ./src/index.ts --outfile latte-darwin-arm64
 
 echo "Building latte-darwin-x64..."
-bun build --compile --target=bun-darwin-x64 ./src/index.ts --outfile latte-darwin-x64
+bun build --compile --target=bun-darwin-x64 --define 'process.env.NODE_ENV="production"' ./src/index.ts --outfile latte-darwin-x64
 
 for BINARY in latte-darwin-arm64 latte-darwin-x64; do
   codesign --force --sign - "$BINARY"

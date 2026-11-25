@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S NODE_ENV=production bun
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { ValidationError } from "@effect/cli"
 import { Effect, Either, Layer } from "effect"

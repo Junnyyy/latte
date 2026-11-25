@@ -121,3 +121,12 @@ release script, which updates `package.json` before testing the binaries.
 The installer must verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
 substitute for a successful executable version check.
+
+## React production build
+
+Every `bun build` of latte passes
+`--define 'process.env.NODE_ENV="production"'`, and the `src/index.ts` shebang
+sets `NODE_ENV=production` for linked installs. Without it, latte bundles
+React's development build, which records about 30 `performance.measure()`
+entries per render. Bun keeps every entry, and the TUI renders every second, so
+memory grows by roughly 0.7 GB a day.
