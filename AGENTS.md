@@ -124,9 +124,33 @@ substitute for a successful executable version check.
 
 ## React production build
 
-Every `bun build` of latte passes
-`--define 'process.env.NODE_ENV="production"'`, and the `src/index.ts` shebang
-sets `NODE_ENV=production` for linked installs. Without it, latte bundles
-React's development build, which records about 30 `performance.measure()`
-entries per render. Bun keeps every entry, and the TUI renders every second, so
-memory grows by roughly 0.7 GB a day.
+Build latte only through `scripts/build.sh <outfile> [bun-target]`.
+`bun run build`, `scripts/install.sh compile`, and `scripts/release.sh` all
+call it. The script passes `--define 'process.env.NODE_ENV="production"'`,
+refuses a binary that contains `react-reconciler.development` or lacks
+`react-reconciler.production`, and then signs the binary. It builds in a
+temporary directory next to `<outfile>` and moves the binary to `<outfile>`
+only after every check passes. Bun signs arm64 output itself, so a rejected
+binary written straight to `<outfile>` would still run.
+
+Without the define, latte bundles React's development build, which records 30
+`performance.measure()` entries per dashboard render. Bun keeps every entry.
+While a session runs, the dashboard polls and renders once a second, so memory
+grows by about 1 GB a day. A v0.4.0 dashboard reached a 5.2 GB footprint after
+5 days. With no session, the dashboard does not poll and memory stays flat.
+
+Builds are byte-for-byte deterministic, so compare SHA-256 hashes to prove
+that a build change does not change the binary. The binary embeds
+`package.json`, including its `scripts` block. An edit to `package.json`
+changes the hash even when the code is the same. In that case, compare
+`strings -n 8` output of the old and new binaries.
+
+The `src/index.ts` shebang sets `NODE_ENV=production` for linked installs. It
+overrides any `NODE_ENV` the caller sets, and the processes latte starts
+inherit it. `bun run dev` ignores the shebang. Unless the caller sets
+`NODE_ENV=production`, it runs React's development build, so a long
+`bun run dev` dashboard session grows the same way.
+
+`ps` RSS understates this growth because macOS compresses idle pages. The
+5.2 GB dashboard showed 316 MB of RSS. Read the physical footprint with
+`footprint <pid>` instead.

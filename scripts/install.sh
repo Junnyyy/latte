@@ -22,9 +22,7 @@ case "$MODE" in
     echo "Linked: $BIN_PATH -> src/index.ts"
     ;;
   compile)
-    bun build ./src/index.ts --compile --define 'process.env.NODE_ENV="production"' --outfile latte
-    codesign --force --sign - latte
-    codesign --verify --strict latte
+    ./scripts/build.sh latte
     ln -sf "$(pwd)/latte" "$BIN_PATH"
     echo "Installed: $BIN_PATH -> ./latte (compiled)"
     ;;
