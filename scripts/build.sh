@@ -4,6 +4,11 @@ set -euo pipefail
 OUTFILE="${1:?Usage: scripts/build.sh <outfile> [bun-target]}"
 TARGET="${2:-}"
 
+if [[ -d "$OUTFILE" ]]; then
+  echo "Error: $OUTFILE is a directory." >&2
+  exit 1
+fi
+
 BUILD_DIR="$(mktemp -d "$(dirname "$OUTFILE")/.latte-build.XXXXXX")"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 CANDIDATE="$BUILD_DIR/$(basename "$OUTFILE")"
