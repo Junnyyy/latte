@@ -147,8 +147,9 @@ changes the hash even when the code is the same. In that case, compare
 
 The `src/index.ts` shebang sets `NODE_ENV=production` for linked installs. It
 overrides any `NODE_ENV` the caller sets, and the processes latte starts
-inherit it. `bun run dev` ignores the shebang and runs React's development
-build, so a long `bun run dev` dashboard session grows the same way.
+inherit it. `bun run dev` ignores the shebang. Unless the caller sets
+`NODE_ENV=production`, it runs React's development build, so a long
+`bun run dev` dashboard session grows the same way.
 
 `ps` RSS understates this growth because macOS compresses idle pages. The
 5.2 GB dashboard showed 316 MB of RSS. Read the physical footprint with
