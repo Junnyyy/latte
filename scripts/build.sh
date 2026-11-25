@@ -4,11 +4,6 @@ set -euo pipefail
 OUTFILE="${1:?Usage: scripts/build.sh <outfile> [bun-target]}"
 TARGET="${2:-}"
 
-if [[ -d "$OUTFILE" ]]; then
-  echo "Error: $OUTFILE is a directory." >&2
-  exit 1
-fi
-
 BUILD_DIR="$(mktemp -d "$(dirname "$OUTFILE")/.latte-build.XXXXXX")"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 CANDIDATE="$BUILD_DIR/$(basename "$OUTFILE")"
@@ -23,4 +18,4 @@ fi
 
 codesign --force --sign - "$CANDIDATE"
 codesign --verify --strict "$CANDIDATE"
-mv -f "$CANDIDATE" "$OUTFILE"
+perl -e 'rename($ARGV[0], $ARGV[1]) or die "Error: cannot move $ARGV[0] to $ARGV[1]: $!\n"' "$CANDIDATE" "$OUTFILE"
