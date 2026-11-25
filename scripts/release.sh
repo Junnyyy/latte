@@ -55,6 +55,10 @@ for BINARY in latte-darwin-arm64 latte-darwin-x64; do
     echo "Error: $BINARY reported version '$BUILT_VERSION', expected '$NEW_VERSION'." >&2
     exit 1
   fi
+  if grep -aqF 'react-reconciler.development' "$BINARY" || ! grep -aqF 'react-reconciler.production' "$BINARY"; then
+    echo "Error: $BINARY does not bundle React's production build. Release aborted." >&2
+    exit 1
+  fi
 done
 
 # Commit, tag, push
