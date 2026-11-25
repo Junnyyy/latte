@@ -128,7 +128,10 @@ Build latte only through `scripts/build.sh <outfile> [bun-target]`.
 `bun run build`, `scripts/install.sh compile`, and `scripts/release.sh` all
 call it. The script passes `--define 'process.env.NODE_ENV="production"'`,
 refuses a binary that contains `react-reconciler.development` or lacks
-`react-reconciler.production`, and then signs the binary.
+`react-reconciler.production`, and then signs the binary. It builds in a
+temporary directory next to `<outfile>` and moves the binary to `<outfile>`
+only after every check passes. Bun signs arm64 output itself, so a rejected
+binary written straight to `<outfile>` would still run.
 
 Without the define, latte bundles React's development build, which records 30
 `performance.measure()` entries per dashboard render. Bun keeps every entry.
