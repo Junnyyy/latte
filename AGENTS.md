@@ -125,8 +125,24 @@ substitute for a successful executable version check.
 ## React production build
 
 Every `bun build` of latte passes
-`--define 'process.env.NODE_ENV="production"'`, and the `src/index.ts` shebang
-sets `NODE_ENV=production` for linked installs. Without it, latte bundles
-React's development build, which records about 30 `performance.measure()`
-entries per render. Bun keeps every entry, and the TUI renders every second, so
-memory grows by roughly 0.7 GB a day.
+`--define 'process.env.NODE_ENV="production"'`. Without it, latte bundles
+React's development build, which records 30 `performance.measure()` entries
+per dashboard render. Bun keeps every entry. While a session runs, the
+dashboard polls and renders once a second, so memory grows by about 1 GB a
+day. A v0.4.0 dashboard reached a 5.2 GB footprint after 5 days. With no
+session, the dashboard does not poll and memory stays flat.
+
+`scripts/release.sh` refuses a binary that contains
+`react-reconciler.development` or lacks `react-reconciler.production`. The
+other build commands have no such check. To check a local build, run
+`grep -ac 'react-reconciler.development' latte`, which prints 0 for a
+production build.
+
+The `src/index.ts` shebang sets `NODE_ENV=production` for linked installs. It
+overrides any `NODE_ENV` the caller sets, and the processes latte starts
+inherit it. `bun run dev` ignores the shebang and runs React's development
+build, so a long `bun run dev` dashboard session grows the same way.
+
+`ps` RSS understates this growth because macOS compresses idle pages. The
+5.2 GB dashboard showed 316 MB of RSS. Read the physical footprint with
+`footprint <pid>` instead.
