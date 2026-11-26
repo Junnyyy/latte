@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
+  echo "Error: releases run in the Release workflow. Start it from the Actions tab, or run: gh workflow run release.yml -f bump=patch" >&2
+  exit 1
+fi
+
 BUMP="${1:-}"
 
 if [[ -z "$BUMP" ]] || [[ ! "$BUMP" =~ ^(patch|minor|major)$ ]]; then
