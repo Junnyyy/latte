@@ -1,11 +1,6 @@
 name: Setup
 description: Install Bun and the locked dependencies through Socket Firewall.
 
-outputs:
-  firewall-report:
-    description: Path to the Socket Firewall report JSON
-    value: ${{ steps.socket.outputs.firewall-path-report }}
-
 runs:
   using: composite
   steps:
@@ -13,10 +8,19 @@ runs:
       with:
         bun-version: 1.4.4
 
-    - id: socket
-      uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
-      with:
-        mode: firewall-free
+    - name: Install Socket Firewall
+      shell: bash
+      env:
+        SFW_VERSION: v1.16.0
+        SFW_MACOS_ARM64_SHA256: 29df049df2ef705a8ce726c6c41fe73a6034f6b1cd0d87f3f15a780d074b6d83
+      run: |
+        dir="$RUNNER_TEMP/sfw"
+        mkdir -p "$dir"
+        curl -fsSL --retry 3 -o "$dir/sfw" \
+          "https://github.com/SocketDev/sfw-free/releases/download/$SFW_VERSION/sfw-free-macos-arm64"
+        echo "$SFW_MACOS_ARM64_SHA256  $dir/sfw" | shasum -a 256 -c -
+        chmod +x "$dir/sfw"
+        echo "$dir" >> "$GITHUB_PATH"
 
     - shell: bash
       run: sfw bun install --frozen-lockfile
