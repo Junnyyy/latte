@@ -1,97 +1,126 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BUMP="${1:-}"
-
-if [[ -z "$BUMP" ]] || [[ ! "$BUMP" =~ ^(patch|minor|major)$ ]]; then
-  echo "Usage: bun run release <patch|minor|major>"
+if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
+  echo "Error: releases run in the Release workflow. Start it from the Actions tab, or run: gh workflow run release.yml -f bump=patch" >&2
   exit 1
 fi
 
-# Ensure clean working tree
+COMMAND="${1:-}"
+BUMP="${2:-}"
+BINARIES=(latte-darwin-arm64 latte-darwin-x64)
+
+if ! { [[ "$COMMAND" == verify && -z "$BUMP" ]] ||
+  { [[ "$COMMAND" =~ ^(build|publish)$ ]] && [[ "$BUMP" =~ ^(patch|minor|major)$ ]]; }; }; then
+  echo "Usage: scripts/release.sh <build|publish> <patch|minor|major>" >&2
+  echo "       scripts/release.sh verify" >&2
+  exit 1
+fi
+
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Error: Working tree is dirty. Commit or stash changes first."
+  echo "Error: Working tree is dirty. Commit or stash changes first." >&2
   exit 1
 fi
 
-# Ensure gh CLI is available
-if ! command -v gh &>/dev/null; then
-  echo "Error: gh CLI is required. Install: https://cli.github.com"
-  exit 1
-fi
+# Both jobs derive the version from their own checkout, so publish never
+# trusts a package.json produced by the build job.
+bump_version() {
+  local old major minor patch
+  old=$(grep '"version"' package.json | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+  IFS='.' read -r major minor patch <<< "$old"
+  case "$BUMP" in
+    major) major=$((major + 1)); minor=0; patch=0 ;;
+    minor) minor=$((minor + 1)); patch=0 ;;
+    patch) patch=$((patch + 1)) ;;
+  esac
+  NEW_VERSION="${major}.${minor}.${patch}"
+  TAG="v${NEW_VERSION}"
 
-# Bump version in package.json (no git tag, we'll do it ourselves)
-OLD_VERSION=$(grep '"version"' package.json | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
-
-IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
-case "$BUMP" in
-  major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-  minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-  patch) PATCH=$((PATCH + 1)) ;;
-esac
-NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-TAG="v${NEW_VERSION}"
-
-echo "Bumping version: ${OLD_VERSION} -> ${NEW_VERSION}"
-
-# Update package.json
-sed -i '' "s/\"version\": \"${OLD_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" package.json
-
-PRIVATE_PATTERNS=(
-  -e '/Users/[A-Za-z0-9._-]+'
-  -e 'gh[pousr]_[A-Za-z0-9]{36}'
-  -e 'github_pat_[A-Za-z0-9_]{22,}'
-  -e 'sk-ant-[A-Za-z0-9_-]{20,}'
-  -e '(AKIA|ASIA)[0-9A-Z]{16}'
-  -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
-)
-EMAIL=$(git config user.email || true)
-if [[ -n "$EMAIL" ]]; then
-  PRIVATE_PATTERNS+=(-e "$(printf '%s' "$EMAIL" | sed 's/[][\.*^$+?(){}|]/\\&/g')")
-fi
-
-# Cross-compile binaries
-for PLATFORM in darwin-arm64 darwin-x64; do
-  BINARY="latte-$PLATFORM"
-  echo "Building $BINARY..."
-  ./scripts/build.sh "$BINARY" "bun-$PLATFORM"
-  if ! BUILT_VERSION=$("./$BINARY" --version); then
-    echo "Error: $BINARY failed to start. Release aborted." >&2
+  echo "Bumping version: ${old} -> ${NEW_VERSION}"
+  sed "s/\"version\": \"${old}\"/\"version\": \"${NEW_VERSION}\"/" package.json > package.json.tmp
+  mv package.json.tmp package.json
+  if ! grep -q "\"version\": \"${NEW_VERSION}\"" package.json; then
+    echo "Error: could not write version ${NEW_VERSION} to package.json." >&2
     exit 1
   fi
-  if [[ "$BUILT_VERSION" != "$NEW_VERSION" ]]; then
-    echo "Error: $BINARY reported version '$BUILT_VERSION', expected '$NEW_VERSION'." >&2
+}
+
+build() {
+  bump_version
+
+  PRIVATE_PATTERNS=(
+    -e '/Users/[A-Za-z0-9._-]+'
+    -e 'gh[pousr]_[A-Za-z0-9]{36}'
+    -e 'github_pat_[A-Za-z0-9_]{22,}'
+    -e 'sk-ant-[A-Za-z0-9_-]{20,}'
+    -e '(AKIA|ASIA)[0-9A-Z]{16}'
+    -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+  )
+  EMAIL=$(git config user.email || true)
+  if [[ -n "$EMAIL" ]]; then
+    PRIVATE_PATTERNS+=(-e "$(printf '%s' "$EMAIL" | sed 's/[][\.*^$+?(){}|]/\\&/g')")
+  fi
+
+  for BINARY in "${BINARIES[@]}"; do
+    echo "Building $BINARY..."
+    ./scripts/build.sh "$BINARY" "bun-${BINARY#latte-}"
+    if ! BUILT_VERSION=$("./$BINARY" --version); then
+      echo "Error: $BINARY failed to start. Release aborted." >&2
+      exit 1
+    fi
+    if [[ "$BUILT_VERSION" != "$NEW_VERSION" ]]; then
+      echo "Error: $BINARY reported version '$BUILT_VERSION', expected '$NEW_VERSION'." >&2
+      exit 1
+    fi
+    SCAN_STATUS=0
+    MATCHES=$(LC_ALL=C grep -aoE "${PRIVATE_PATTERNS[@]}" "$BINARY" | sort -u) || SCAN_STATUS=$?
+    if (( SCAN_STATUS == 0 )); then
+      echo "Error: $BINARY contains private data. Release aborted. First 8 bytes of each match:" >&2
+      cut -c1-8 <<< "$MATCHES" | sort -u | sed 's/$/.../' >&2
+      exit 1
+    elif (( SCAN_STATUS > 1 )); then
+      echo "Error: could not scan $BINARY for private data. Release aborted." >&2
+      exit 1
+    fi
+  done
+
+  shasum -a 256 "${BINARIES[@]}" > SHA256SUMS
+}
+
+verify() {
+  for BINARY in "${BINARIES[@]}"; do
+    if ! grep -qE "^[0-9a-f]{64}  ${BINARY}\$" SHA256SUMS; then
+      echo "Error: SHA256SUMS has no checksum for $BINARY. Release aborted." >&2
+      exit 1
+    fi
+  done
+  if ! shasum -a 256 -c SHA256SUMS; then
+    echo "Error: release binaries do not match SHA256SUMS. Release aborted." >&2
     exit 1
   fi
-  SCAN_STATUS=0
-  MATCHES=$(LC_ALL=C grep -aoE "${PRIVATE_PATTERNS[@]}" "$BINARY" | sort -u) || SCAN_STATUS=$?
-  if (( SCAN_STATUS == 0 )); then
-    echo "Error: $BINARY contains private data. Release aborted. First 8 bytes of each match:" >&2
-    cut -c1-8 <<< "$MATCHES" | sort -u | sed 's/$/.../' >&2
-    exit 1
-  elif (( SCAN_STATUS > 1 )); then
-    echo "Error: could not scan $BINARY for private data. Release aborted." >&2
+}
+
+# Runs no bun and no latte binary: this step holds the write token.
+publish() {
+  verify
+
+  if ! command -v gh &>/dev/null; then
+    echo "Error: gh CLI is required. Install: https://cli.github.com" >&2
     exit 1
   fi
-done
 
-# Commit, tag, push
-git add package.json
-git commit -m "chore: bump version to ${NEW_VERSION}"
-git tag "$TAG"
-git push
-git push origin "$TAG"
+  bump_version
 
-# Create GitHub release with binaries
-echo "Creating GitHub release ${TAG}..."
-gh release create "$TAG" \
-  --title "$TAG" \
-  --generate-notes \
-  latte-darwin-arm64 \
-  latte-darwin-x64
+  git add package.json
+  git commit -m "chore: bump version to ${NEW_VERSION}"
+  git tag "$TAG"
+  git push
+  git push origin "$TAG"
 
-# Clean up binaries
-rm -f latte-darwin-arm64 latte-darwin-x64
+  echo "Creating GitHub release ${TAG}..."
+  gh release create "$TAG" --title "$TAG" --generate-notes "${BINARIES[@]}" SHA256SUMS
 
-echo ""
-echo "Released ${TAG}"
+  echo "Released ${TAG}"
+}
+
+"$COMMAND"
