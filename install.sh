@@ -107,6 +107,24 @@ if ! curl -fsSL "$URL" -o "$TMPFILE"; then
   exit 1
 fi
 
+if SUMS="$(curl -fsL "https://github.com/${REPO}/releases/download/${TAG}/SHA256SUMS")"; then
+  EXPECTED_SHA256="$(awk -v f="$BINARY" '$2 == f { print $1 }' <<< "$SUMS")"
+elif [ "$TAG" = "v0.4.1" ]; then
+  # Releases up to v0.4.1 have no SHA256SUMS. Delete this branch after the next release.
+  case "$BINARY" in
+    latte-darwin-arm64) EXPECTED_SHA256="b7031effa1778288626dc41423da5d0282145ddbbfe86848719d109913cbbd16" ;;
+    latte-darwin-x64)   EXPECTED_SHA256="9d52c7c380874d721ba932daee876bd9cf58ec481083bbb9aa07b690b8ef9823" ;;
+  esac
+else
+  err "Could not download SHA256SUMS for $TAG. Existing installation was not changed."
+  exit 1
+fi
+ACTUAL_SHA256="$(shasum -a 256 "$TMPFILE" | awk '{ print $1 }')"
+if [ -z "$EXPECTED_SHA256" ] || [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+  err "Downloaded $BINARY does not match its published SHA-256. Existing installation was not changed."
+  exit 1
+fi
+
 chmod +x "$TMPFILE"
 if ! INSTALLED_VERSION=$("$TMPFILE" --version); then
   err "Downloaded $BINARY failed to start. Existing installation was not changed."
