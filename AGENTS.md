@@ -113,16 +113,30 @@ desktop app matches too.
 
 ## Release boundaries
 
-`bun run release patch` bumps the version, builds, commits, tags, pushes, and
-publishes a GitHub release. Do not use it as a build-only diagnostic command.
-Compile release candidates separately until publishing is authorized.
+Releases run only in the Release workflow, `.github/workflows/release.yml`.
+Start it from the Actions tab or with `gh workflow run release.yml -f bump=patch`.
+The workflow runs CI, then runs `scripts/release.sh` on `main` as
+github-actions[bot]. The script bumps the version, builds, commits, tags, pushes,
+and publishes a GitHub release. It refuses to run unless `GITHUB_ACTIONS` is
+`true`. Do not start the workflow as a build-only diagnostic. Compile release
+candidates with `scripts/build.sh` until publishing is authorized.
+
+The workflow pushes the bump commit with `GITHUB_TOKEN`. GitHub does not start
+workflows for pushes made with that token, so the bump commit gets no CI run.
+
+Every CI install runs `sfw bun install --frozen-lockfile` through Socket
+Firewall, in `.github/actions/setup/action.yml`. Socket's free firewall
+documents npm, yarn, and pnpm, not bun. It works as a proxy, so check a run's
+firewall report to confirm that bun's downloads went through it. Pin every
+action by commit SHA with a `# vX.Y.Z` comment. Dependabot proposes new pins
+weekly.
 
 Preserve the `latte-darwin-arm64` and `latte-darwin-x64` asset names. The installer
-selects those names directly. Before publishing, verify both signatures and run
-both binaries. Running x64 binaries on Apple Silicon requires Rosetta.
-Check Rosetta before starting a release with `arch -x86_64 /usr/bin/true`.
-If it reports `Bad CPU type in executable`, install Rosetta before running the
-release script, which updates `package.json` before testing the binaries.
+selects those names directly. The release verifies both signatures and runs
+both binaries before it publishes. Running x64 binaries on Apple Silicon
+requires Rosetta. The release job runs `arch -x86_64 /usr/bin/true` and installs
+Rosetta when it fails. `release.sh` updates `package.json` before it tests the
+binaries, so Rosetta must be ready before the script starts.
 
 The installer must verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
@@ -132,7 +146,8 @@ substitute for a successful executable version check.
 uploads anything. The scan reads the whole file with `grep -a`, because macOS
 `strings` can skip Mach-O sections. It aborts the release on a `/Users/<name>`
 path, the releaser's `git config user.email`, a GitHub, Anthropic, or AWS
-credential, or a private-key header. The scanned files are the uploaded files,
+credential, or a private-key header. In CI, the releaser's email is the
+github-actions[bot] address. The scanned files are the uploaded files,
 so a passing scan covers the published bytes. Bun embeds latte's strings as
 UTF-8, so the scan has no UTF-16 patterns.
 

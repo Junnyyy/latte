@@ -254,17 +254,19 @@ bun run build                   # compile standalone binary
 bun run typecheck               # type check
 ```
 
+CI runs `bun run typecheck`, `bun test`, and `bun run build` on every pull request and every push to `main`. Each CI install goes through [Socket Firewall](https://github.com/SocketDev/action) (`sfw`), which blocks known malicious packages.
+
 ### Releasing
 
-Requires the [GitHub CLI](https://cli.github.com) (`gh`) and an Apple Silicon Mac with Rosetta to test both architectures.
+Releases run in the **Release** GitHub Actions workflow. Start it from the **Actions** tab, or with the [GitHub CLI](https://cli.github.com):
 
 ```sh
-bun run release patch           # 0.1.0 -> 0.1.1
-bun run release minor           # 0.1.0 -> 0.2.0
-bun run release major           # 0.1.0 -> 1.0.0
+gh workflow run release.yml -f bump=patch    # 0.1.0 -> 0.1.1
+gh workflow run release.yml -f bump=minor    # 0.1.0 -> 0.2.0
+gh workflow run release.yml -f bump=major    # 0.1.0 -> 1.0.0
 ```
 
-This bumps `package.json` version and cross-compiles darwin arm64 and x64 binaries. It ad-hoc signs both executables, verifies their signatures, and checks their versions before it commits, tags, pushes, and creates a GitHub Release.
+The workflow runs CI first. On `main`, it then bumps the `package.json` version and cross-compiles darwin arm64 and x64 binaries on an Apple Silicon runner. It ad-hoc signs both executables, verifies their signatures, checks their versions, and scans them for private data. After every check passes, it commits, tags, pushes, and creates a GitHub Release. `scripts/release.sh` refuses to run outside GitHub Actions.
 
 To build and check locally without publishing, run `bun run build` and `./latte --version`. Ad-hoc signing prevents invalid-signature startup failures. It does not notarize the executable.
 
