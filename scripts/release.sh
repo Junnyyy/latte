@@ -42,7 +42,7 @@ PRIVATE_PATTERNS=(
   -e 'gh[pousr]_[A-Za-z0-9]{36}'
   -e 'github_pat_[A-Za-z0-9_]{22,}'
   -e 'sk-ant-[A-Za-z0-9_-]{20,}'
-  -e 'AKIA[0-9A-Z]{16}'
+  -e '(AKIA|ASIA)[0-9A-Z]{16}'
   -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 )
 EMAIL=$(git config user.email || true)
@@ -66,8 +66,8 @@ for PLATFORM in darwin-arm64 darwin-x64; do
   SCAN_STATUS=0
   MATCHES=$(LC_ALL=C grep -aoE "${PRIVATE_PATTERNS[@]}" "$BINARY" | sort -u) || SCAN_STATUS=$?
   if (( SCAN_STATUS == 0 )); then
-    echo "Error: $BINARY contains private data. Release aborted." >&2
-    echo "$MATCHES" >&2
+    echo "Error: $BINARY contains private data. Release aborted. First 8 bytes of each match:" >&2
+    cut -c1-8 <<< "$MATCHES" | sort -u | sed 's/$/.../' >&2
     exit 1
   elif (( SCAN_STATUS > 1 )); then
     echo "Error: could not scan $BINARY for private data. Release aborted." >&2
