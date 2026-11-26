@@ -22,4 +22,14 @@ runs:
       run: sfw bun install --frozen-lockfile
 
     - shell: bash
-      run: cat "$SFW_JSON_REPORT_PATH"
+      run: |
+        cat "$SFW_JSON_REPORT_PATH"
+        echo "--- env sfw injects"
+        diff <(env | sort) <(sfw env | sort) | grep -v -E 'TOKEN|SECRET' || true
+        echo "--- dead proxy control"
+        rm -rf node_modules ~/.bun/install/cache
+        HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 bun install --frozen-lockfile 2>&1 | tail -5 || true
+        echo "--- verbose sfw install"
+        rm -rf node_modules ~/.bun/install/cache
+        sfw bun install --frozen-lockfile --verbose 2>&1 | grep -i -E 'proxy|127\.0\.0\.1|localhost|registry' | head -20 || true
+        ls node_modules | wc -l
