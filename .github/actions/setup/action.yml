@@ -20,3 +20,6 @@ runs:
 
     - shell: bash
       run: sfw bun install --frozen-lockfile
+
+    - shell: bash
+      run: cat "$SFW_JSON_REPORT_PATH"
