@@ -37,6 +37,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 latte
 latte-darwin-arm64
 latte-darwin-x64
+SHA256SUMS
 
 # Specs and plans (local only)
 docs/

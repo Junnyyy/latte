@@ -81,10 +81,23 @@ build() {
       exit 1
     fi
   done
+
+  shasum -a 256 "${BINARIES[@]}" > SHA256SUMS
 }
 
 # Runs no bun and no latte binary: this step holds the write token.
 publish() {
+  for BINARY in "${BINARIES[@]}"; do
+    if ! grep -qE "^[0-9a-f]{64}  ${BINARY}\$" SHA256SUMS; then
+      echo "Error: SHA256SUMS has no checksum for $BINARY. Release aborted." >&2
+      exit 1
+    fi
+  done
+  if ! shasum -a 256 -c SHA256SUMS; then
+    echo "Error: release binaries do not match SHA256SUMS. Release aborted." >&2
+    exit 1
+  fi
+
   if ! command -v gh &>/dev/null; then
     echo "Error: gh CLI is required. Install: https://cli.github.com" >&2
     exit 1
@@ -99,7 +112,7 @@ publish() {
   git push origin "$TAG"
 
   echo "Creating GitHub release ${TAG}..."
-  gh release create "$TAG" --title "$TAG" --generate-notes "${BINARIES[@]}"
+  gh release create "$TAG" --title "$TAG" --generate-notes "${BINARIES[@]}" SHA256SUMS
 
   echo "Released ${TAG}"
 }
