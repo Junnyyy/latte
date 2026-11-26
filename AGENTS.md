@@ -127,6 +127,26 @@ The installer must verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
 substitute for a successful executable version check.
 
+`release.sh` publishes as soon as both binaries pass their checks. To check the
+binaries before they become public, build candidates first:
+
+1. Make the same version edit to `package.json` that `release.sh` makes.
+2. Run `scripts/build.sh <dir>/latte-darwin-<arch> bun-darwin-<arch>` for each arch.
+3. Run `git checkout package.json`.
+4. Scan `strings -n 6` output for home paths, user names, emails, and tokens.
+5. After the release, compare each asset's `digest` from
+   `gh release view <tag> --json assets` with the candidate's SHA-256.
+
+The output directory does not change the hash, so matching digests prove that
+users download the scanned bytes. Every binary contains strings from the Bun
+runtime that look like secrets but hold no data: TLS labels such as
+`CLIENT_TRAFFIC_SECRET_0`, `.env.local` loader names, and a `/private/tmp`
+constant. v0.4.0 and v0.4.1 contain the same set.
+
+To check that a binary has the React memory-leak fix, count
+`react-reconciler.development` with `grep -acF`. The v0.4.0 assets contain it.
+The v0.4.1 assets contain `react-reconciler.production` instead.
+
 ## React production build
 
 Build latte only through `scripts/build.sh <outfile> [bun-target]`.
