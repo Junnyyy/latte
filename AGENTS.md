@@ -26,6 +26,12 @@ latte's only state is the system-wide `caffeinate` process. `latte off` and the
 TUI stop every `caffeinate` the user owns, including ones latte did not start.
 Never drive `on`, `off`, a duration, or the TUI while another `caffeinate` runs.
 
+An agent session in T3 Code can have one such `caffeinate`. T3 Code started
+`caffeinate -i -w <T3 Code PID>` to keep the Mac awake during the v0.4.1
+release, and the `verify` helper then blocked every mutating drive. Run
+`pgrep -lx caffeinate` before you plan a drive. Read-only checks still work:
+`codesign --verify --strict`, `--version`, and `status`.
+
 A `caffeinate` started from the TUI is in latte's process group. If latte is the
 session leader of its terminal, a hangup kills that `caffeinate` too. Run latte
 under a job-control shell in a PTY, as a terminal tab does, or quit-then-check
@@ -122,6 +128,18 @@ The installer must verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
 substitute for a successful executable version check.
 
+`release.sh` scans each binary for private data before it commits, tags, or
+uploads anything. The scan reads the whole file with `grep -a`, because macOS
+`strings` can skip Mach-O sections. It aborts the release on a `/Users/<name>`
+path, the releaser's `git config user.email`, a GitHub, Anthropic, or AWS
+credential, or a private-key header. The scanned files are the uploaded files,
+so a passing scan covers the published bytes. Bun embeds latte's strings as
+UTF-8, so the scan has no UTF-16 patterns.
+
+Bun's runtime holds strings that look like secrets but carry no data, such as
+TLS labels like `CLIENT_TRAFFIC_SECRET_0` and CSS names that start with `sk-`.
+Keep scan patterns specific enough to skip them.
+
 ## React production build
 
 Build latte only through `scripts/build.sh <outfile> [bun-target]`.
@@ -138,6 +156,11 @@ Without the define, latte bundles React's development build, which records 30
 While a session runs, the dashboard polls and renders once a second, so memory
 grows by about 1 GB a day. A v0.4.0 dashboard reached a 5.2 GB footprint after
 5 days. With no session, the dashboard does not poll and memory stays flat.
+
+To see which React build a published binary bundles, run
+`grep -acF react-reconciler.development <binary>`. The v0.4.0 assets print
+`1`, and the v0.4.1 assets print `0`. The marker shows the build, not the
+memory behavior. Prove flat memory with `footprint` over a running session.
 
 Builds are byte-for-byte deterministic, so compare SHA-256 hashes to prove
 that a build change does not change the binary. The binary embeds
