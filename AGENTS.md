@@ -115,11 +115,34 @@ desktop app matches too.
 
 Releases run only in the Release workflow, `.github/workflows/release.yml`.
 Start it from the Actions tab or with `gh workflow run release.yml -f bump=patch`.
-The workflow runs CI, then runs `scripts/release.sh` on `main` as
-github-actions[bot]. The script bumps the version, builds, commits, tags, pushes,
-and publishes a GitHub release. It refuses to run unless `GITHUB_ACTIONS` is
-`true`. Do not start the workflow as a build-only diagnostic. Compile release
+Do not start the workflow as a build-only diagnostic. Compile release
 candidates with `scripts/build.sh` until publishing is authorized.
+
+The workflow runs CI, then two jobs on `main`:
+
+- `build` runs `scripts/release.sh build` on macOS. It bumps `package.json`,
+  builds and checks both binaries, and writes `SHA256SUMS`. It uploads the
+  binaries and `SHA256SUMS` as an artifact and commits nothing.
+- `publish` runs `scripts/release.sh publish` on Linux as github-actions[bot].
+  It checks the binaries against `SHA256SUMS` and attests build provenance for
+  both binaries. Then it commits the bump, tags, pushes, and creates the GitHub
+  release with both binaries and `SHA256SUMS`.
+
+Both subcommands refuse to run unless `GITHUB_ACTIONS` is `true`.
+
+The split keeps dependency code away from the write token. Only `publish` has
+`contents: write`, `id-token: write`, and `attestations: write`. It runs no
+bun, no setup action, and no latte binary, so no package code runs while it
+holds those permissions. Keep it that way. `build` runs every dependency, with
+`contents: read` and no persisted git credentials.
+
+`publish` takes only the binaries and `SHA256SUMS` from `build`. It derives
+the version from its own checkout and the bump input, and it writes
+`package.json` itself. A tampered `package.json` from `build` cannot reach the
+commit. The checksum check proves that the artifact arrived intact and that
+`SHA256SUMS` describes the published binaries. It does not protect against a
+compromised `build` job, which writes both files. The provenance attestation
+records which workflow run built them.
 
 The workflow pushes the bump commit with `GITHUB_TOKEN`. GitHub does not start
 workflows for pushes made with that token, so the bump commit gets no CI run.
@@ -133,32 +156,53 @@ it pointed at a closed port, `bun install` fails with `ConnectionRefused`, so an
 unreachable firewall fails the install instead of bypassing it. Under `sfw`,
 `bun install --verbose` with an empty cache downloads every tarball over HTTPS.
 
-The firewall report at `$SFW_JSON_REPORT_PATH` lists only blocked packages and
-parse failures. A clean report does not prove that traffic went through `sfw`.
-Check the environment `sfw env` adds and run the closed-port control instead.
+The setup action downloads `sfw-free-macos-arm64` from `SocketDev/sfw-free` at
+the version in `SFW_VERSION`. It checks the file against
+`SFW_MACOS_ARM64_SHA256` and fails the step on a mismatch. Do not use
+`SocketDev/action`. It installs the latest `sfw` without a checksum. Dependabot
+does not update the pin. To bump `sfw`, read the new asset's digest:
+
+```sh
+gh api repos/SocketDev/sfw-free/releases/tags/<tag> --jq '.assets[] | select(.name == "sfw-free-macos-arm64") | .digest'
+```
+
+Set `SFW_VERSION` to the tag. Set `SFW_MACOS_ARM64_SHA256` to the digest
+without its `sha256:` prefix.
+
+CI does not set `SFW_JSON_REPORT_PATH`, so `sfw` writes no report. A report
+lists only blocked packages and parse failures, so a clean report would not
+prove that traffic went through `sfw`. Check the environment `sfw env` adds and
+run the closed-port control instead.
 
 Pin every action by commit SHA with a `# vX.Y.Z` comment. Dependabot proposes
 new pins weekly.
 
-Preserve the `latte-darwin-arm64` and `latte-darwin-x64` asset names. The installer
-selects those names directly. The release verifies both signatures and runs
-both binaries before it publishes. Running x64 binaries on Apple Silicon
-requires Rosetta. The release job runs `arch -x86_64 /usr/bin/true` and installs
-Rosetta when it fails. `release.sh` updates `package.json` before it tests the
-binaries, so Rosetta must be ready before the script starts.
+Preserve the `latte-darwin-arm64`, `latte-darwin-x64`, and `SHA256SUMS` asset
+names. The installer selects those names directly. The `build` job verifies
+both signatures and runs both binaries. Running x64 binaries on Apple Silicon
+requires Rosetta. The `build` job runs `arch -x86_64 /usr/bin/true` and installs
+Rosetta when it fails. `release.sh build` updates `package.json` before it tests
+the binaries, so Rosetta must be ready before the script starts.
 
-The installer must verify that a downloaded binary starts and reports the
+The installer checks a downloaded binary against the release's `SHA256SUMS`
+before it runs the binary. Releases up to v0.4.1 have no `SHA256SUMS`. For
+v0.4.1 only, `install.sh` uses two embedded hashes instead. Delete that
+fallback after the next release. Any other release without `SHA256SUMS` fails
+the install and leaves the existing install unchanged.
+
+The installer must also verify that a downloaded binary starts and reports the
 expected version before replacing an existing install. A release tag is not a
 substitute for a successful executable version check.
 
-`release.sh` scans each binary for private data before it commits, tags, or
-uploads anything. The scan reads the whole file with `grep -a`, because macOS
+`release.sh build` scans each binary for private data before it writes
+`SHA256SUMS`. The scan reads the whole file with `grep -a`, because macOS
 `strings` can skip Mach-O sections. It aborts the release on a `/Users/<name>`
-path, the releaser's `git config user.email`, a GitHub, Anthropic, or AWS
-credential, or a private-key header. In CI, the releaser's email is the
-github-actions[bot] address. The scanned files are the uploaded files,
-so a passing scan covers the published bytes. Bun embeds latte's strings as
-UTF-8, so the scan has no UTF-16 patterns.
+path, the value of `git config user.email`, a GitHub, Anthropic, or AWS
+credential, or a private-key header. The `build` job sets no git identity, so
+the scan includes an email only if the runner image configures one. `publish`
+checks the binaries against `SHA256SUMS`, so the published bytes are the
+scanned bytes. Bun embeds latte's strings as UTF-8, so the scan has no UTF-16
+patterns.
 
 Bun's runtime holds strings that look like secrets but carry no data, such as
 TLS labels like `CLIENT_TRAFFIC_SECRET_0` and CSS names that start with `sk-`.

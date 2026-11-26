@@ -21,6 +21,18 @@ curl -fsSL https://raw.githubusercontent.com/Junnyyy/latte/main/install.sh | bas
 
 Run the same command to update to the latest version. It will skip the download if you're already up to date.
 
+The installer checks the downloaded binary against the release's `SHA256SUMS` file before it runs the binary. If the check fails, it leaves your current install unchanged.
+
+### Verify a download
+
+To verify a binary you downloaded from the [Releases page](https://github.com/Junnyyy/latte/releases) yourself, use the [GitHub CLI](https://cli.github.com):
+
+```sh
+gh attestation verify latte-darwin-arm64 --repo Junnyyy/latte
+```
+
+The command confirms that the Release workflow in this repository built the file. Releases up to v0.4.1 have no attestation.
+
 ### From source
 
 Requires [Bun](https://bun.sh).
@@ -254,7 +266,7 @@ bun run build                   # compile standalone binary
 bun run typecheck               # type check
 ```
 
-CI runs `bun run typecheck`, `bun test`, and `bun run build` on every pull request and every push to `main`. Each CI install goes through [Socket Firewall](https://github.com/SocketDev/action) (`sfw`), which blocks known malicious packages.
+CI runs `bun run typecheck`, `bun test`, and `bun run build` on every pull request and every push to `main`. Each CI install goes through [Socket Firewall](https://github.com/SocketDev/sfw-free) (`sfw`), which blocks known malicious packages. CI downloads a pinned `sfw` release and checks its SHA-256 before it runs it.
 
 ### Releasing
 
@@ -266,7 +278,12 @@ gh workflow run release.yml -f bump=minor    # 0.1.0 -> 0.2.0
 gh workflow run release.yml -f bump=major    # 0.1.0 -> 1.0.0
 ```
 
-The workflow runs CI first. On `main`, it then bumps the `package.json` version and cross-compiles darwin arm64 and x64 binaries on an Apple Silicon runner. It ad-hoc signs both executables, verifies their signatures, checks their versions, and scans them for private data. After every check passes, it commits, tags, pushes, and creates a GitHub Release. `scripts/release.sh` refuses to run outside GitHub Actions.
+The workflow runs CI first. On `main`, it then runs two jobs:
+
+1. The build job bumps the `package.json` version and cross-compiles darwin arm64 and x64 binaries on an Apple Silicon runner. It ad-hoc signs both executables, verifies their signatures, checks their versions, and scans them for private data. Then it writes `SHA256SUMS`. This job has read-only access to the repository.
+2. The publish job checks the binaries against `SHA256SUMS` and records build provenance for them. Then it commits the version bump, tags, pushes, and creates a GitHub Release with both binaries and `SHA256SUMS`.
+
+Only the publish job can write to the repository. It installs no dependencies and runs no latte binary, so no package code runs while it holds write access. `scripts/release.sh` refuses to run outside GitHub Actions.
 
 To build and check locally without publishing, run `bun run build` and `./latte --version`. Ad-hoc signing prevents invalid-signature startup failures. It does not notarize the executable.
 
