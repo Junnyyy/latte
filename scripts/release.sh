@@ -37,6 +37,19 @@ echo "Bumping version: ${OLD_VERSION} -> ${NEW_VERSION}"
 # Update package.json
 sed -i '' "s/\"version\": \"${OLD_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" package.json
 
+PRIVATE_PATTERNS=(
+  -e '/Users/[A-Za-z0-9._-]+'
+  -e 'gh[pousr]_[A-Za-z0-9]{36}'
+  -e 'github_pat_[A-Za-z0-9_]{22,}'
+  -e 'sk-ant-[A-Za-z0-9_-]{20,}'
+  -e 'AKIA[0-9A-Z]{16}'
+  -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+)
+EMAIL=$(git config user.email || true)
+if [[ -n "$EMAIL" ]]; then
+  PRIVATE_PATTERNS+=(-e "$(printf '%s' "$EMAIL" | sed 's/[][\.*^$+?(){}|]/\\&/g')")
+fi
+
 # Cross-compile binaries
 for PLATFORM in darwin-arm64 darwin-x64; do
   BINARY="latte-$PLATFORM"
@@ -48,6 +61,16 @@ for PLATFORM in darwin-arm64 darwin-x64; do
   fi
   if [[ "$BUILT_VERSION" != "$NEW_VERSION" ]]; then
     echo "Error: $BINARY reported version '$BUILT_VERSION', expected '$NEW_VERSION'." >&2
+    exit 1
+  fi
+  SCAN_STATUS=0
+  MATCHES=$(LC_ALL=C grep -aoE "${PRIVATE_PATTERNS[@]}" "$BINARY" | sort -u) || SCAN_STATUS=$?
+  if (( SCAN_STATUS == 0 )); then
+    echo "Error: $BINARY contains private data. Release aborted." >&2
+    echo "$MATCHES" >&2
+    exit 1
+  elif (( SCAN_STATUS > 1 )); then
+    echo "Error: could not scan $BINARY for private data. Release aborted." >&2
     exit 1
   fi
 done
