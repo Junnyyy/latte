@@ -26,6 +26,11 @@ latte's only state is the system-wide `caffeinate` process. `latte off` and the
 TUI stop every `caffeinate` the user owns, including ones latte did not start.
 Never drive `on`, `off`, a duration, or the TUI while another `caffeinate` runs.
 
+An agent session in T3 Code always has one such `caffeinate`. T3 Code starts
+`caffeinate -i -w <T3 Code PID>` to keep the Mac awake while it runs, so the
+`verify` helper blocks every mutating drive. Read-only checks still work:
+`codesign --verify --strict`, `--version`, and `status`.
+
 A `caffeinate` started from the TUI is in latte's process group. If latte is the
 session leader of its terminal, a hangup kills that `caffeinate` too. Run latte
 under a job-control shell in a PTY, as a terminal tab does, or quit-then-check
