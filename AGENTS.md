@@ -126,10 +126,19 @@ workflows for pushes made with that token, so the bump commit gets no CI run.
 
 Every CI install runs `sfw bun install --frozen-lockfile` through Socket
 Firewall, in `.github/actions/setup/action.yml`. Socket's free firewall
-documents npm, yarn, and pnpm, not bun. It works as a proxy, so check a run's
-firewall report to confirm that bun's downloads went through it. Pin every
-action by commit SHA with a `# vX.Y.Z` comment. Dependabot proposes new pins
-weekly.
+documents npm, yarn, and pnpm, not bun. It works with bun 1.4.4, measured on a
+macOS 15 runner. `sfw` starts a local proxy and sets `HTTPS_PROXY` and
+`NODE_EXTRA_CA_CERTS` for the command it wraps. Bun honors `HTTPS_PROXY`. With
+it pointed at a closed port, `bun install` fails with `ConnectionRefused`, so an
+unreachable firewall fails the install instead of bypassing it. Under `sfw`,
+`bun install --verbose` with an empty cache downloads every tarball over HTTPS.
+
+The firewall report at `$SFW_JSON_REPORT_PATH` lists only blocked packages and
+parse failures. A clean report does not prove that traffic went through `sfw`.
+Check the environment `sfw env` adds and run the closed-port control instead.
+
+Pin every action by commit SHA with a `# vX.Y.Z` comment. Dependabot proposes
+new pins weekly.
 
 Preserve the `latte-darwin-arm64` and `latte-darwin-x64` asset names. The installer
 selects those names directly. The release verifies both signatures and runs
