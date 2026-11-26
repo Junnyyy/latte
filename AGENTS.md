@@ -124,9 +124,10 @@ The workflow runs CI, then two jobs on `main`:
   builds and checks both binaries, and writes `SHA256SUMS`. It uploads the
   binaries and `SHA256SUMS` as an artifact and commits nothing.
 - `publish` runs `scripts/release.sh publish` on Linux as github-actions[bot].
-  It checks the binaries against `SHA256SUMS` and attests build provenance for
-  both binaries. Then it commits the bump, tags, pushes, and creates the GitHub
-  release with both binaries and `SHA256SUMS`.
+  It runs `scripts/release.sh verify` to check the binaries against
+  `SHA256SUMS`, and only then attests build provenance for both binaries. A
+  failed check leaves no attestation. Then it commits the bump, tags, pushes,
+  and creates the GitHub release with both binaries and `SHA256SUMS`.
 
 Both subcommands refuse to run unless `GITHUB_ACTIONS` is `true`.
 

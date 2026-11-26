@@ -10,8 +10,10 @@ COMMAND="${1:-}"
 BUMP="${2:-}"
 BINARIES=(latte-darwin-arm64 latte-darwin-x64)
 
-if [[ ! "$COMMAND" =~ ^(build|publish)$ ]] || [[ ! "$BUMP" =~ ^(patch|minor|major)$ ]]; then
+if ! { [[ "$COMMAND" == verify && -z "$BUMP" ]] ||
+  { [[ "$COMMAND" =~ ^(build|publish)$ ]] && [[ "$BUMP" =~ ^(patch|minor|major)$ ]]; }; }; then
   echo "Usage: scripts/release.sh <build|publish> <patch|minor|major>" >&2
+  echo "       scripts/release.sh verify" >&2
   exit 1
 fi
 
@@ -85,8 +87,7 @@ build() {
   shasum -a 256 "${BINARIES[@]}" > SHA256SUMS
 }
 
-# Runs no bun and no latte binary: this step holds the write token.
-publish() {
+verify() {
   for BINARY in "${BINARIES[@]}"; do
     if ! grep -qE "^[0-9a-f]{64}  ${BINARY}\$" SHA256SUMS; then
       echo "Error: SHA256SUMS has no checksum for $BINARY. Release aborted." >&2
@@ -97,6 +98,11 @@ publish() {
     echo "Error: release binaries do not match SHA256SUMS. Release aborted." >&2
     exit 1
   fi
+}
+
+# Runs no bun and no latte binary: this step holds the write token.
+publish() {
+  verify
 
   if ! command -v gh &>/dev/null; then
     echo "Error: gh CLI is required. Install: https://cli.github.com" >&2
