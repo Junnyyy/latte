@@ -16,10 +16,40 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  release:
+  build:
     needs: ci
     if: github.ref == 'refs/heads/main'
     runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Ensure Rosetta
+        run: arch -x86_64 /usr/bin/true || sudo softwareupdate --install-rosetta --agree-to-license
+
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: ./scripts/release.sh build "$BUMP"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: |
+            latte-darwin-arm64
+            latte-darwin-x64
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency:
@@ -28,18 +58,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Ensure Rosetta
-        run: arch -x86_64 /usr/bin/true || sudo softwareupdate --install-rosetta --agree-to-license
-
-      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
 
       - name: Set git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
 
-      - name: Release
+      - name: Publish
         env:
           BUMP: ${{ inputs.bump }}
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/release.sh "$BUMP"
+        run: ./scripts/release.sh publish "$BUMP"
